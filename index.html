@@ -1,0 +1,1816 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px/1.5 system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>メール資料メーカー</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap">
+</head>
+<body>
+<style>
+/* Layout: 左に「入力・整え方・書き出し」の操作パネル、右にA4の紙面。紙面はAIが組み直したペライチ。狭い画面では縦積み。 */
+:root {
+  --bg: #eceff4;
+  --panel: #ffffff;
+  --ink: #1b2433;
+  --muted: #5b6678;
+  --line: #d4dae4;
+  --accent: #2b4c8c;
+  --accent-ink: #ffffff;
+  --accent-soft: #e2e8f4;
+  --warn: #8a5a00;
+  --warn-soft: #fbf0d9;
+  --err: #c0392b;
+  /* 紙面はどちらのテーマでも白い紙。--pa 系は紙面の色テーマで切り替える */
+  --paper: #ffffff;
+  --paper-ink: #1d2430;
+  --paper-muted: #667085;
+  --paper-line: #e1e5ec;
+  --paper-shadow: 0 1px 2px rgba(20, 30, 50, .08), 0 8px 28px rgba(20, 30, 50, .10);
+  --pa: #24477a;
+  --pa-deep: #1a3560;
+  --pa-soft: #e8eef8;
+  --pa-mark: #dde6f6;
+  --caution-bg: #fff6e5;
+  --caution-line: #f0d9a8;
+  --caution-ink: #6b4a00;
+  --f-body: "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+  --f-display: "Zen Kaku Gothic New", "BIZ UDPGothic", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161d; --panel: #1a202a; --ink: #e6eaf0; --muted: #9aa5b5; --line: #2d3644;
+    --accent: #8fb0ec; --accent-ink: #0f1520; --accent-soft: #1f2a3e; --warn: #f0c46a; --warn-soft: #2e2615; --err: #ff8a80;
+    --paper-shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.45);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161d; --panel: #1a202a; --ink: #e6eaf0; --muted: #9aa5b5; --line: #2d3644;
+  --accent: #8fb0ec; --accent-ink: #0f1520; --accent-soft: #1f2a3e; --warn: #f0c46a; --warn-soft: #2e2615; --err: #ff8a80;
+  --paper-shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.45);
+  color-scheme: dark;
+}
+.paper[data-tone="green"]  { --pa: #1d6a51; --pa-deep: #144d3a; --pa-soft: #e4f2eb; --pa-mark: #d3eadf; }
+.paper[data-tone="orange"] { --pa: #b0521b; --pa-deep: #853c12; --pa-soft: #fbede3; --pa-mark: #f7dcc8; }
+.paper[data-tone="purple"] { --pa: #5b3f8c; --pa-deep: #432d6b; --pa-soft: #efe9f7; --pa-mark: #e2d8f2; }
+.paper[data-tone="gray"]   { --pa: #3d4756; --pa-deep: #29313d; --pa-soft: #eef0f3; --pa-mark: #e0e4ea; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.6; }
+.app {
+  max-width: 1260px; margin: 0 auto;
+  padding-block: 20px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 24px; align-items: start;
+}
+@media (max-width: 900px) { .app { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- 操作パネル ---------- */
+.panel { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 16px; min-width: 0; }
+@media (max-width: 900px) { .panel { position: static; } }
+.brand { display: flex; flex-direction: column; gap: 2px; }
+.brand h1 { font-family: var(--f-display); font-weight: 700; font-size: 22px; margin: 0; letter-spacing: .02em; text-wrap: balance; }
+.brand p { margin: 0; color: var(--muted); font-size: 13px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.card h2 { font-size: 12px; letter-spacing: .08em; color: var(--muted); margin: 0; font-weight: 700; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: transparent; color: var(--muted); padding: 8px 6px; font: inherit; font-size: 13px; cursor: pointer; }
+.seg button[aria-selected="true"], .seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); font-weight: 700; }
+.drop {
+  border: 1.5px dashed var(--line); border-radius: 10px; padding: 20px 14px; text-align: center;
+  display: flex; flex-direction: column; gap: 6px; align-items: center; cursor: pointer; transition: border-color .15s, background .15s;
+}
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop strong { font-size: 14px; }
+.drop span { color: var(--muted); font-size: 12px; }
+.drop svg { width: 30px; height: 30px; color: var(--accent); }
+.loaded { font-size: 12px; color: var(--muted); word-break: break-all; }
+.field { font: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); width: 100%; }
+.paste {
+  min-height: 150px; max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 10px;
+  background: var(--bg); font-size: 13px; outline: none; white-space: pre-wrap; word-break: break-word;
+}
+.paste:focus, .field:focus { border-color: var(--accent); outline: none; }
+.paste:empty::before { content: attr(data-placeholder); color: var(--muted); white-space: pre-line; }
+.paste img { max-width: 100%; display: block; margin: 6px 0; border: 1px solid var(--line); border-radius: 4px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.col { display: flex; flex-direction: column; gap: 8px; }
+.btn {
+  font: inherit; font-size: 13px; border-radius: 8px; padding: 8px 12px; cursor: pointer; border: 1px solid var(--line);
+  background: var(--panel); color: var(--ink); display: inline-flex; align-items: center; gap: 6px; justify-content: center;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn svg { width: 15px; height: 15px; flex: none; }
+button:focus-visible, .drop:focus-visible, input:focus-visible + .switch, .swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.opt { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; font-size: 13px; }
+.opt input { position: absolute; opacity: 0; pointer-events: none; }
+.switch { flex: none; width: 34px; height: 20px; border-radius: 10px; background: var(--line); position: relative; transition: background .15s; margin-top: 1px; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--panel); transition: transform .15s; }
+.opt input:checked + .switch { background: var(--accent); }
+.opt input:checked + .switch::after { transform: translateX(14px); }
+.opt small { display: block; color: var(--muted); font-size: 12px; }
+.label { font-size: 12px; color: var(--muted); }
+.swatches { display: flex; gap: 8px; }
+.swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; }
+.swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+.export { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.export .wide { grid-column: 1 / -1; }
+.status { font-size: 12px; color: var(--muted); min-height: 1.4em; }
+.status.err { color: var(--err); }
+.hint { font-size: 12px; color: var(--muted); margin: 0; }
+
+/* ---------- 紙面まわり ---------- */
+.stage { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.stagebar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--muted); min-height: 26px; }
+.badge { border-radius: 999px; padding: 3px 10px; font-weight: 700; font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
+.badge.sample { background: var(--warn-soft); color: var(--warn); }
+.badge.ai { background: var(--accent-soft); color: var(--accent); }
+.spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.paper {
+  background: var(--paper); color: var(--paper-ink); box-shadow: var(--paper-shadow); border-radius: 4px;
+  width: 100%; max-width: 794px; margin: 0 auto; overflow: hidden; container-type: inline-size;
+  font-family: var(--f-body); font-size: 13.5px; line-height: 1.8;
+}
+.paper svg.ic { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.paper [contenteditable="true"] { outline: none; }
+.paper [contenteditable="true"] :focus-visible { outline: 1px dashed var(--paper-line); }
+.paper strong { font-weight: 700; background: linear-gradient(transparent 62%, var(--pa-mark) 62%); }
+.exporting strong { background: none; }
+.exporting .fig-x { display: none; }
+.exporting { box-shadow: none !important; border-radius: 0 !important; }
+
+/* ---------- ペライチ ---------- */
+.op-hero { background: var(--pa); color: #fff; padding: 34px 44px 26px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: center; position: relative; overflow: hidden; }
+.op-hero .deco { position: absolute; right: -40px; top: -60px; width: 300px; height: 300px; opacity: .14; pointer-events: none; }
+.op-cat { display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .14em; background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.35); border-radius: 3px; padding: 1px 9px; margin-bottom: 10px; }
+.op-title { font-family: var(--f-display); font-weight: 900; font-size: 28px; line-height: 1.4; margin: 0 0 8px; text-wrap: balance; letter-spacing: .01em; }
+.op-sub { font-size: 14.5px; line-height: 1.7; margin: 0 0 14px; opacity: .95; text-wrap: pretty; }
+.op-meta { font-size: 11.5px; opacity: .8; display: flex; gap: 16px; flex-wrap: wrap; }
+.op-emblem { position: relative; width: 104px; height: 104px; border-radius: 50%; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.3); display: grid; place-items: center; }
+.op-emblem svg.ic { width: 50px; height: 50px; stroke-width: 1.4; color: #fff; }
+.op-main { padding: 26px 44px 10px; display: flex; flex-direction: column; gap: 24px; }
+.op-label { font-size: 11.5px; font-weight: 700; letter-spacing: .14em; color: var(--pa); margin: 0 0 8px; display: flex; align-items: center; gap: 8px; }
+.op-label::after { content: ""; flex: 1; height: 1px; background: var(--paper-line); }
+.op-points { display: grid; grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); gap: 12px; }
+.op-point { background: var(--pa-soft); border-radius: 8px; padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.op-point .head { display: flex; align-items: center; gap: 8px; color: var(--pa); }
+.op-point .num { font-family: var(--f-display); font-weight: 900; font-size: 13px; letter-spacing: .06em; }
+.op-point .t { font-family: var(--f-display); font-weight: 700; font-size: 15px; line-height: 1.45; color: var(--paper-ink); }
+.op-point .x { font-size: 12.5px; line-height: 1.7; color: #3a4352; }
+.op-sec { display: flex; flex-direction: column; gap: 10px; }
+.op-sec > .sh { display: flex; align-items: center; gap: 10px; }
+.op-sec > .sh .badge-ic { width: 34px; height: 34px; border-radius: 50%; background: var(--pa); color: #fff; display: grid; place-items: center; flex: none; }
+.op-sec > .sh .badge-ic svg.ic { width: 18px; height: 18px; }
+.op-sec h2 { font-family: var(--f-display); font-weight: 700; font-size: 18px; line-height: 1.45; margin: 0; flex: 1; border-bottom: 2px solid var(--pa-soft); padding-bottom: 4px; text-wrap: balance; }
+.op-sec p { margin: 0; }
+.op-body { display: flex; flex-direction: column; gap: 10px; padding-left: 44px; }
+.op-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 18px; align-items: start; }
+.op-checks { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.op-checks.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.op-checks li { display: flex; gap: 8px; align-items: flex-start; background: var(--pa-soft); border-radius: 6px; padding: 7px 10px; line-height: 1.6; }
+.op-checks li svg.ic { width: 17px; height: 17px; color: var(--pa); margin-top: 2px; }
+.op-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+.op-card { border: 1px solid var(--paper-line); border-top: 3px solid var(--pa); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.op-card .t { font-weight: 700; color: var(--pa-deep); margin-bottom: 2px; }
+.op-card .x { font-size: 12.5px; line-height: 1.7; }
+.op-steps { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 22px; }
+.op-step { position: relative; background: var(--pa-soft); border-radius: 8px; padding: 12px; min-width: 0; }
+.op-step:not(:last-child)::after { content: ""; position: absolute; right: -16px; top: 50%; margin-top: -8px; border: 8px solid transparent; border-left: 10px solid var(--pa); border-right: 0; }
+.op-step .n { font-family: var(--f-display); font-weight: 900; font-size: 11.5px; letter-spacing: .1em; color: #fff; background: var(--pa); border-radius: 3px; padding: 0 7px; display: inline-block; margin-bottom: 6px; }
+.op-step .t { font-weight: 700; line-height: 1.5; margin-bottom: 2px; }
+.op-step .x { font-size: 12.5px; line-height: 1.7; }
+.op-example { display: flex; flex-direction: column; gap: 6px; }
+.op-example .lab { font-size: 11.5px; font-weight: 700; color: var(--pa); display: flex; align-items: center; gap: 6px; letter-spacing: .08em; }
+.op-example .lab svg.ic { width: 16px; height: 16px; }
+.op-bubble { background: var(--pa); color: #fff; border-radius: 16px 16px 4px 16px; padding: 12px 16px; font-weight: 700; line-height: 1.7; align-self: flex-end; max-width: 92%; }
+.op-note { font-size: 12px; color: var(--paper-muted); padding-left: 1em; text-indent: -1em; }
+.op-figs { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.op-figs.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.op-fig { margin: 0; position: relative; min-width: 0; }
+.op-fig img { width: 100%; height: auto; display: block; border-radius: 6px; border: 1px solid var(--paper-line); }
+.op-fig figcaption { font-size: 11.5px; color: var(--paper-muted); margin-top: 5px; line-height: 1.6; display: flex; gap: 6px; }
+.op-fig figcaption b { color: var(--pa); flex: none; }
+.op-caution { display: flex; gap: 10px; align-items: flex-start; background: var(--caution-bg); border: 1px solid var(--caution-line); color: var(--caution-ink); border-radius: 8px; padding: 10px 14px; font-size: 12.5px; }
+.op-caution svg.ic { width: 18px; height: 18px; margin-top: 2px; }
+.op-caution b { margin-right: 6px; }
+.op-cta { margin: 8px 44px 0; background: var(--pa-soft); border-radius: 10px; padding: 16px 20px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: center; }
+.op-cta .ic-wrap { width: 46px; height: 46px; border-radius: 12px; background: var(--pa); color: #fff; display: grid; place-items: center; }
+.op-cta .ic-wrap svg.ic { width: 24px; height: 24px; }
+.op-cta .t { font-family: var(--f-display); font-weight: 700; font-size: 16px; color: var(--pa-deep); line-height: 1.5; }
+.op-cta .x { font-size: 12.5px; line-height: 1.7; }
+.op-foot { margin: 18px 44px 0; padding: 10px 0 22px; border-top: 1px solid var(--paper-line); font-size: 11px; color: var(--paper-muted); }
+.op-tablewrap { overflow-x: auto; }
+.op-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; line-height: 1.6; border: 1px solid var(--paper-line); border-radius: 8px; overflow: hidden; }
+.op-table th, .op-table td { padding: 8px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--paper-line); }
+.op-table tr:last-child td { border-bottom: 0; }
+.op-table thead th { background: var(--pa); color: #fff; font-weight: 700; }
+.op-table tbody th { background: var(--pa-soft); color: var(--pa-deep); font-weight: 700; white-space: nowrap; }
+.op-nums { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.op-num { text-align: center; border: 1px solid var(--paper-line); border-radius: 8px; padding: 12px 10px 10px; min-width: 0; }
+.op-num .t { font-family: var(--f-display); font-weight: 900; font-size: 26px; line-height: 1.25; color: var(--pa); letter-spacing: .01em; }
+.op-num .x { font-size: 12px; line-height: 1.6; color: #3a4352; margin-top: 4px; }
+.op-hub { display: grid; grid-template-columns: minmax(0, 1fr) 150px minmax(0, 1fr); column-gap: 28px; row-gap: 10px; align-items: center; }
+.op-hub .hub-c { grid-column: 2; grid-row: 1 / span var(--rows, 2); align-self: center; justify-self: center; width: 140px; height: 140px; border-radius: 50%;
+  background: var(--pa); color: #fff; display: grid; place-items: center; text-align: center; padding: 14px; font-family: var(--f-display); font-weight: 700; font-size: 15px; line-height: 1.45; box-shadow: 0 0 0 6px var(--pa-soft); }
+.op-hub .hub-n { position: relative; background: var(--pa-soft); border-radius: 8px; padding: 9px 12px; min-width: 0; }
+.op-hub .hub-n.l { grid-column: 1; }
+.op-hub .hub-n.r { grid-column: 3; }
+.op-hub .hub-n.l::after, .op-hub .hub-n.r::before { content: ""; position: absolute; top: 50%; width: 28px; height: 2px; background: var(--pa); opacity: .5; }
+.op-hub .hub-n.l::after { right: -28px; }
+.op-hub .hub-n.r::before { left: -28px; }
+.op-hub .hub-n .t { font-weight: 700; color: var(--pa-deep); line-height: 1.5; }
+.op-hub .hub-n .x { font-size: 12px; line-height: 1.6; }
+.empty { padding: 72px 32px; text-align: center; color: var(--paper-muted); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.empty svg { width: 44px; height: 44px; color: var(--pa); opacity: .7; }
+.empty strong { color: var(--paper-ink); font-size: 15px; }
+.empty p { margin: 0; font-size: 13px; line-height: 1.8; }
+a.btn { text-decoration: none; }
+.btn.ghost { background: transparent; padding: 5px 10px; font-size: 12px; }
+.btn.danger-armed { border-color: var(--err); color: var(--err); }
+.urlrow { display: flex; gap: 6px; }
+.urlrow .field { flex: 1; min-width: 0; }
+.manual { border: 1px solid var(--line); border-radius: 8px; padding: 0; }
+.manual summary { cursor: pointer; padding: 9px 12px; font-size: 13px; font-weight: 700; list-style-position: inside; }
+.manual[open] summary { border-bottom: 1px solid var(--line); }
+.manual ol { margin: 0; padding: 10px 12px 12px 30px; display: flex; flex-direction: column; gap: 10px; font-size: 12.5px; }
+.manual li { display: flex; flex-direction: column; gap: 6px; }
+.manual li::marker { font-weight: 700; color: var(--accent); }
+.manual textarea { resize: vertical; font-size: 12px; }
+#m-prompt { margin: 0 12px 12px; width: calc(100% - 24px); }
+.notice { font-size: 12px; line-height: 1.7; background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 8px 10px; }
+.fig-x { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; opacity: 0; transition: opacity .15s; z-index: 1; }
+.fig-x button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--paper-line); background: #fff; color: var(--paper-ink); cursor: pointer; font: 700 13px/1 var(--f-body); box-shadow: 0 1px 3px rgba(0,0,0,.15); padding: 0; }
+.fig-x button:hover { border-color: var(--pa); color: var(--pa); }
+.fig-x button:focus-visible { outline: 2px solid var(--pa); outline-offset: 1px; }
+figure:hover .fig-x, figure:focus-within .fig-x { opacity: 1; }
+@media (hover: none) { .fig-x { opacity: .9; } }
+.paper figure { text-align: center; }
+.paper figure img { display: inline-block; }
+.paper figure[data-size="m"] img { width: 66%; }
+.paper figure[data-size="s"] img { width: 42%; }
+.paper figure:not([data-size="l"]) figcaption { justify-content: center; }
+.paper figure.flash { animation: flash 1.4s ease-out; }
+@keyframes flash { from { box-shadow: 0 0 0 4px var(--pa-mark); } to { box-shadow: 0 0 0 4px transparent; } }
+.paper-wrap { position: relative; }
+.paper[data-orient="land"] { max-width: 1123px; }
+/* 横向き：1枚なら新聞のような2段組み、複数ページならセクションを左右に並べる（読む順が崩れないように） */
+@container (min-width: 760px) {
+  .paper[data-orient="land"] .op-body { padding-left: 0; }
+  .paper[data-orient="land"][data-pages="1"] .op-main { display: block; column-count: 2; column-gap: 36px; }
+  .paper[data-orient="land"][data-pages="1"] .op-main > * { margin-bottom: 22px; }
+  .paper[data-orient="land"][data-pages="1"] .op-main > section:first-child { column-span: all; }
+  .paper[data-orient="land"][data-pages="1"] :is(p, li, figure, .sh, .op-point, .op-card, .op-step, .op-steps, .op-num, .op-table, .op-hub, .op-caution, .op-example, .op-split, .op-figs) { break-inside: avoid; }
+  .paper[data-orient="land"][data-pages="1"] .sh { break-after: avoid; }
+  .paper[data-orient="land"]:not([data-pages="1"]) .op-main { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 36px; row-gap: 24px; align-items: start; }
+  .paper[data-orient="land"]:not([data-pages="1"]) .op-main > section:first-child,
+  .paper[data-orient="land"]:not([data-pages="1"]) .op-main > .op-caution { grid-column: 1 / -1; }
+  .paper[data-orient="land"][data-pages="1"] .plain-doc .body { column-count: 2; column-gap: 36px; }
+  .paper[data-orient="land"][data-pages="1"] .plain-doc .body > * { break-inside: avoid; }
+}
+.pg-guide { position: absolute; height: 0; border-top: 2px dashed var(--accent); pointer-events: none; z-index: 2; }
+.pg-guide span { position: absolute; right: 8px; top: -11px; background: var(--accent); color: var(--accent-ink); font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
+.fitinfo { font-size: 12px; color: var(--muted); }
+.fitinfo.warn { color: var(--warn); font-weight: 700; }
+@container (max-width: 600px) {
+  .op-hero { grid-template-columns: minmax(0, 1fr); padding: 24px 20px 20px; }
+  .op-emblem { display: none; }
+  .op-title { font-size: 22px; }
+  .op-main { padding: 20px 18px 6px; }
+  .op-points, .op-figs.two, .op-checks.two, .op-split { grid-template-columns: minmax(0, 1fr); }
+  .op-steps { grid-auto-flow: row; gap: 10px; }
+  .op-step::after { display: none; }
+  .op-body { padding-left: 0; }
+  .op-cta { margin: 8px 18px 0; }
+  .op-hub { grid-template-columns: minmax(0, 1fr); }
+  .op-hub > * { grid-row: auto !important; }
+  .op-hub .hub-c { order: -1; grid-column: 1; width: auto; height: auto; border-radius: 8px; box-shadow: none; }
+  .op-hub .hub-n.l, .op-hub .hub-n.r { grid-column: 1; }
+  .op-hub .hub-n::after, .op-hub .hub-n::before { display: none; }
+  .op-foot { margin: 16px 18px 0; }
+}
+
+/* ---------- メール文面どおり ---------- */
+.plain-doc { padding: 52px 60px 56px; font-size: 14.5px; line-height: 1.85; }
+@container (max-width: 600px) { .plain-doc { padding: 26px 18px 32px; } }
+.plain-doc .cat { display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .12em; color: var(--pa); border: 1px solid currentColor; border-radius: 3px; padding: 1px 8px; margin-bottom: 12px; }
+.plain-doc h1 { font-family: var(--f-display); font-weight: 700; font-size: 25px; line-height: 1.45; margin: 0 0 12px; text-wrap: balance; }
+.plain-doc .meta { font-size: 12.5px; color: var(--paper-muted); padding-bottom: 16px; border-bottom: 2px solid var(--pa); display: flex; gap: 20px; flex-wrap: wrap; }
+.plain-doc h2 { font-family: var(--f-display); font-weight: 700; font-size: 17.5px; margin: 30px 0 8px; padding: 0 0 6px 12px; border-left: 5px solid var(--pa); border-bottom: 1px solid var(--paper-line); }
+.plain-doc p { margin: 0 0 6px; }
+.plain-doc .body > :first-child { margin-top: 20px; }
+.plain-doc ul { margin: 6px 0 12px; padding: 10px 16px 10px 2.2em; background: var(--pa-soft); border-radius: 6px; }
+.plain-doc .note { font-size: 13px; color: var(--paper-muted); }
+.plain-doc figure { margin: 16px 0 18px; text-align: center; position: relative; }
+.plain-doc figure img { max-width: 100%; height: auto; border: 1px solid var(--paper-line); border-radius: 4px; }
+.plain-doc figcaption { font-size: 12px; color: var(--paper-muted); margin-top: 4px; }
+.plain-doc figcaption b { color: var(--pa); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="app">
+  <aside class="panel">
+    <div class="brand">
+      <h1>メール資料メーカー</h1>
+      <p>メールやWebの文章を、配れるペライチ資料に組み直します。</p>
+    </div>
+
+    <section class="card" aria-labelledby="in-h">
+      <h2 id="in-h">1. 元になる内容を入れる</h2>
+      <div class="seg" role="tablist">
+        <button id="tab-file" role="tab" aria-selected="true">メールファイル</button>
+        <button id="tab-paste" role="tab" aria-selected="false">文章・Web</button>
+      </div>
+      <div id="pane-file">
+        <label class="drop" id="drop" tabindex="0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 6.5A1.5 1.5 0 0 1 5.5 5h13A1.5 1.5 0 0 1 20 6.5v11a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"/><path d="m4.5 6 7.5 6 7.5-6"/></svg>
+          <strong>.msg / .eml をドロップ</strong>
+          <span>Outlookからメールをドラッグ、またはクリックして選択</span>
+          <input type="file" id="file" accept=".msg,.eml,message/rfc822,application/vnd.ms-outlook" hidden>
+        </label>
+        <div class="loaded" id="loaded"></div>
+      </div>
+      <div id="pane-paste" hidden>
+        <div class="col">
+          <div class="urlrow">
+            <input id="paste-url" class="field" type="url" inputmode="url" placeholder="WebページのURL（任意）">
+            <a class="btn" id="open-url" href="#" target="_blank" rel="noopener" hidden>開く</a>
+          </div>
+          <div class="notice" id="url-notice" hidden>このツールからはWebページを直接読み込めません。「開く」でページを表示し、本文を選択してコピーし、下に貼り付けてください。URLは資料の出典として載せます。</div>
+          <input id="paste-subject" class="field" placeholder="タイトル（任意。空ならAIが付けます）">
+          <div class="paste" id="paste" contenteditable="true" data-placeholder="Web記事・メール・メモなどの文章を貼り付けてください。&#10;画像やスクリーンショットも、ここに貼り付けたりドロップしたりできます。"></div>
+          <div class="row">
+            <button class="btn" id="add-img" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 18 5-5 4 4 3-3 4 4"/></svg>画像を追加</button>
+            <button class="btn primary" id="build-paste" type="button">資料にする</button>
+            <input type="file" id="img-file" accept="image/*" multiple hidden>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="opt-h">
+      <h2 id="opt-h">2. 仕上げ</h2>
+      <div class="col">
+        <span class="label">レイアウト</span>
+        <div class="seg">
+          <button id="lay-op" type="button" aria-pressed="true">ペライチ</button>
+          <button id="lay-plain" type="button" aria-pressed="false">元の文章どおり</button>
+        </div>
+      </div>
+      <div class="row" style="gap:12px;align-items:flex-start">
+        <div class="col" style="flex:1 1 90px">
+          <span class="label">用紙の向き</span>
+          <div class="seg" id="orient-seg">
+            <button type="button" data-v="port" aria-pressed="true">縦</button>
+            <button type="button" data-v="land" aria-pressed="false">横</button>
+          </div>
+        </div>
+        <div class="col" style="flex:2 1 160px">
+          <span class="label">ページ数</span>
+          <div class="seg" id="pages-seg">
+            <button type="button" data-v="1" aria-pressed="true">1枚</button>
+            <button type="button" data-v="2" aria-pressed="false">2枚</button>
+            <button type="button" data-v="3" aria-pressed="false">3枚</button>
+            <button type="button" data-v="auto" aria-pressed="false">自動</button>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <span class="label">色</span>
+        <div class="swatches" id="swatches">
+          <button class="swatch" type="button" data-tone="indigo" style="background:#24477a" aria-label="藍" aria-pressed="true"></button>
+          <button class="swatch" type="button" data-tone="green" style="background:#1d6a51" aria-label="緑" aria-pressed="false"></button>
+          <button class="swatch" type="button" data-tone="orange" style="background:#b0521b" aria-label="橙" aria-pressed="false"></button>
+          <button class="swatch" type="button" data-tone="purple" style="background:#5b3f8c" aria-label="紫" aria-pressed="false"></button>
+          <button class="swatch" type="button" data-tone="gray" style="background:#3d4756" aria-label="墨" aria-pressed="false"></button>
+        </div>
+      </div>
+      <label class="opt"><input type="checkbox" id="o-strip" checked><span class="switch"></span>
+        <span>あいさつ・署名を除く<small>宛名、「お疲れ様です」、署名欄を外します</small></span></label>
+      <div class="row">
+        <button class="btn" id="ai" type="button" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/></svg>AIで組み直す</button>
+        <button class="btn" id="ins-img" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 18 5-5 4 4 3-3 4 4"/></svg>画像を差し込む</button>
+        <input type="file" id="ins-file" accept="image/*" multiple hidden>
+      </div>
+      <details class="manual" id="manual">
+        <summary>AIが使えないとき：チャットのAIに頼む</summary>
+        <ol>
+          <li><span>依頼文をコピーします。</span>
+            <span class="row"><button class="btn" id="m-copy" type="button">依頼文をコピー</button>
+            <a class="btn" href="https://claude.ai/new" target="_blank" rel="noopener">Claudeを開く</a></span></li>
+          <li>Claude（無料版で可）のチャットに貼り付けて送ります。</li>
+          <li><span>返ってきた回答を全部コピーして、下に貼り付けます。</span>
+            <textarea class="field" id="m-answer" rows="4" placeholder="AIの回答（{ から始まる文字）をここに貼り付け"></textarea>
+            <button class="btn primary" id="m-apply" type="button">回答を反映</button></li>
+        </ol>
+        <textarea class="field" id="m-prompt" rows="4" readonly hidden></textarea>
+      </details>
+      <p class="hint" id="ai-hint">ペライチはAIが見出し・要点・図解・画像の説明を付けて構成します。右の資料はクリックして直接書き換えられます。</p>
+      <p class="hint">画像は、資料の入れたい位置をクリックしてから「画像を差し込む」を押すか、資料に直接ドラッグ・貼り付けすると入ります。画像の↑↓で位置、「大」で大きさを変えられます。</p>
+    </section>
+
+    <section class="card" aria-labelledby="out-h">
+      <h2 id="out-h">3. 書き出す</h2>
+      <div class="export">
+        <button class="btn primary" id="x-pdf" type="button">PDFで保存</button>
+        <button class="btn" id="x-docx" type="button">Wordで保存</button>
+        <button class="btn wide" id="x-copy" type="button">資料をコピー（Word・PowerPoint・メールへ貼り付け）</button>
+      </div>
+      <div class="status" id="status" role="status"></div>
+    </section>
+  </aside>
+
+  <main class="stage">
+    <div class="stagebar">
+      <span id="stage-label">プレビュー</span>
+      <span class="fitinfo" id="fit-info" hidden></span>
+      <button class="btn ghost" id="clear" type="button" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12.5A1.5 1.5 0 0 0 8.5 21h7a1.5 1.5 0 0 0 1.5-1.5L18 7M9 7V4.5h6V7"/></svg><span>内容をクリア</span></button>
+      <span class="badge sample" id="sample-badge">サンプル表示中：メールを読み込むと置き換わります</span>
+      <span class="badge ai" id="ai-badge" hidden><span class="spin"></span>AIがペライチに組み直しています…</span>
+    </div>
+    <div class="paper-wrap" id="paper-wrap"><article class="paper" id="paper" data-tone="indigo" data-orient="port" data-pages="1"></article></div>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const statusEl = $('#status');
+const setStatus = (msg, err) => { statusEl.textContent = msg || ''; statusEl.classList.toggle('err', !!err); };
+
+/* ================= 画像の保管 ================= */
+const images = new Map(); // id -> {url, blob}
+let imgSeq = 0;
+function addImage(blob) {
+  const id = 'img' + (++imgSeq);
+  images.set(id, { url: URL.createObjectURL(blob), blob });
+  return id;
+}
+
+/* ================= OLE (CFB) 読み取り：.msg 用 ================= */
+function readCFB(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  if (dv.getUint32(0, true) !== 0xE011CFD0) throw new Error('Outlookの.msg形式ではありません');
+  const ss = 1 << dv.getUint16(30, true), mss = 1 << dv.getUint16(32, true);
+  const nFat = dv.getUint32(44, true), dirStart = dv.getUint32(48, true), cutoff = dv.getUint32(56, true);
+  const mfStart = dv.getUint32(60, true), nMf = dv.getUint32(64, true);
+  let difat = dv.getUint32(68, true); const nDifat = dv.getUint32(72, true);
+  const END = 0xFFFFFFFA, off = s => (s + 1) * ss;
+  const fatSecs = [];
+  for (let i = 0; i < 109 && fatSecs.length < nFat; i++) { const s = dv.getUint32(76 + i * 4, true); if (s < END) fatSecs.push(s); }
+  for (let k = 0; k < nDifat && difat < END; k++) {
+    const o = off(difat);
+    for (let i = 0; i < ss / 4 - 1 && fatSecs.length < nFat; i++) { const s = dv.getUint32(o + i * 4, true); if (s < END) fatSecs.push(s); }
+    difat = dv.getUint32(o + ss - 4, true);
+  }
+  const per = ss / 4, fat = new Uint32Array(fatSecs.length * per);
+  fatSecs.forEach((s, i) => { for (let j = 0; j < per; j++) fat[i * per + j] = dv.getUint32(off(s) + j * 4, true); });
+  const chain = (start, table) => { const out = []; let s = start; while (s < END && s < table.length && out.length < 1e6) { out.push(s); s = table[s]; } return out; };
+  const readBig = (start, size) => {
+    const secs = chain(start, fat), out = new Uint8Array(secs.length * ss);
+    secs.forEach((s, i) => out.set(u8.subarray(off(s), Math.min(off(s) + ss, u8.length)), i * ss));
+    return size == null ? out : out.subarray(0, size);
+  };
+  const dir = readBig(dirStart), ddv = new DataView(dir.buffer);
+  const entries = [];
+  for (let o = 0; o + 128 <= dir.length; o += 128) {
+    const nl = ddv.getUint16(o + 64, true); let name = '';
+    for (let i = 0; i < nl / 2 - 1; i++) name += String.fromCharCode(ddv.getUint16(o + i * 2, true));
+    entries.push({ name, type: dir[o + 66], left: ddv.getUint32(o + 68, true), right: ddv.getUint32(o + 72, true),
+      child: ddv.getUint32(o + 76, true), start: ddv.getUint32(o + 116, true), size: ddv.getUint32(o + 120, true) });
+  }
+  const root = entries[0];
+  const mini = readBig(root.start, root.size);
+  const miniFat = nMf ? new Uint32Array(readBig(mfStart).buffer) : new Uint32Array(0);
+  const readStream = e => {
+    if (e.size < cutoff) {
+      const secs = chain(e.start, miniFat), out = new Uint8Array(secs.length * mss);
+      secs.forEach((s, i) => out.set(mini.subarray(s * mss, (s + 1) * mss), i * mss));
+      return out.subarray(0, e.size);
+    }
+    return readBig(e.start, e.size);
+  };
+  const map = new Map();
+  const walk = (id, prefix, seen) => {
+    if (id >= END || id >= entries.length || seen.has(id)) return;
+    seen.add(id);
+    const e = entries[id];
+    walk(e.left, prefix, seen); walk(e.right, prefix, seen);
+    const path = prefix + e.name;
+    if (e.type === 2) map.set(path, e);
+    else if (e.type === 1) walk(e.child, path + '/', seen);
+  };
+  walk(root.child, '', new Set());
+  return { has: p => map.has(p), read: p => map.has(p) ? readStream(map.get(p)) : null, paths: () => [...map.keys()] };
+}
+
+/* ================= 圧縮RTF (LZFu) ================= */
+const LZ_PRE = '{\\rtf1\\ansi\\mac\\deff0\\deftab720{\\fonttbl;}{\\f0\\fnil \\froman \\fswiss \\fmodern \\fscript \\fdecor MS Sans SerifSymbolArialTimes New RomanCourier{\\colortbl\\red0\\green0\\blue0\n\r\\par \\pard\\plain\\f0\\fs20\\b\\i\\u\\tab\\tx';
+function lzfu(d) {
+  const dv = new DataView(d.buffer, d.byteOffset, d.byteLength);
+  const usize = dv.getUint32(4, true), magic = dv.getUint32(8, true);
+  if (magic === 0x414C454D) return d.subarray(16, 16 + usize);
+  const buf = new Uint8Array(4096); for (let i = 0; i < LZ_PRE.length; i++) buf[i] = LZ_PRE.charCodeAt(i);
+  let w = LZ_PRE.length, i = 16; const out = [];
+  while (i < d.length) {
+    const f = d[i++];
+    for (let b = 0; b < 8 && i < d.length; b++) {
+      if (f & (1 << b)) {
+        const ref = (d[i] << 8) | d[i + 1]; i += 2;
+        const o = ref >> 4, l = (ref & 15) + 2;
+        if (o === w) return new Uint8Array(out);
+        for (let k = 0; k < l; k++) { const c = buf[(o + k) & 4095]; out.push(c); buf[w] = c; w = (w + 1) & 4095; }
+      } else { const c = d[i++]; out.push(c); buf[w] = c; w = (w + 1) & 4095; }
+    }
+  }
+  return new Uint8Array(out);
+}
+
+/* ================= RTF → HTML（Outlookが包んだHTMLを取り出す） ================= */
+const CP = { 932: 'shift_jis', 936: 'gbk', 949: 'euc-kr', 950: 'big5', 1250: 'windows-1250', 1251: 'windows-1251', 1252: 'windows-1252', 65001: 'utf-8' };
+function deencapsulate(r) {
+  const head = new TextDecoder('latin1').decode(r.subarray(0, 400));
+  const cpm = head.match(/\\ansicpg(\d+)/);
+  const dec = new TextDecoder(CP[cpm ? +cpm[1] : 1252] || 'windows-1252');
+  const fromHtml = /\\fromhtml/.test(head);
+  const parts = []; let bytes = [];
+  const flush = () => { if (bytes.length) { parts.push(dec.decode(new Uint8Array(bytes))); bytes = []; } };
+  const SKIP = new Set(['fonttbl', 'colortbl', 'stylesheet', 'info', 'pict', 'object', 'header', 'footer', 'listtable', 'listoverridetable', 'generator', 'mhtmltag', 'xmlnstbl', 'rsidtbl']);
+  let st = { skip: false, tag: false, hr: false, uc: 1 }; const stack = [];
+  let ucSkip = 0, star = false, i = 0;
+  const out = () => !st.skip && (fromHtml ? (st.tag || !st.hr) : true);
+  const emitByte = b => { if (ucSkip > 0) { ucSkip--; return; } if (out()) bytes.push(b); };
+  const emitStr = s => { if (out()) { flush(); parts.push(s); } };
+  while (i < r.length) {
+    const c = r[i];
+    if (c === 0x7B) { stack.push(st); st = { ...st }; i++; continue; }
+    if (c === 0x7D) { st = stack.pop() || st; i++; star = false; continue; }
+    if (c === 0x0D || c === 0x0A) { i++; continue; }
+    if (c !== 0x5C) { emitByte(c); i++; continue; }
+    const n = r[i + 1];
+    if (n === 0x5C || n === 0x7B || n === 0x7D) { emitByte(n); i += 2; continue; }
+    if (n === 0x27) { emitByte(parseInt(String.fromCharCode(r[i + 2], r[i + 3]), 16)); i += 4; continue; }
+    if (n === 0x2A) { star = true; i += 2; continue; }
+    if (n === 0x7E) { emitStr(' '); i += 2; continue; }
+    if (!((n >= 0x61 && n <= 0x7A) || (n >= 0x41 && n <= 0x5A))) { i += 2; continue; }
+    let j = i + 1, word = '';
+    while (j < r.length && ((r[j] >= 0x61 && r[j] <= 0x7A) || (r[j] >= 0x41 && r[j] <= 0x5A))) word += String.fromCharCode(r[j++]);
+    let ps = '';
+    if (r[j] === 0x2D || (r[j] >= 0x30 && r[j] <= 0x39)) { ps += String.fromCharCode(r[j++]); while (r[j] >= 0x30 && r[j] <= 0x39) ps += String.fromCharCode(r[j++]); }
+    if (r[j] === 0x20) j++;
+    i = j;
+    const param = ps === '' ? null : parseInt(ps, 10);
+    if (word === 'htmltag') { st.tag = true; st.skip = false; }
+    else if (word === 'htmlrtf') { st.hr = param !== 0; }
+    else if (word === 'par' || word === 'line') { if (ucSkip > 0) ucSkip = 0; emitStr(fromHtml && st.tag ? '\r\n' : '\n'); }
+    else if (word === 'tab') emitStr('\t');
+    else if (word === 'u') { const v = param < 0 ? param + 65536 : param; emitStr(String.fromCharCode(v)); ucSkip = st.uc; }
+    else if (word === 'uc') st.uc = param || 0;
+    else if (SKIP.has(word) || star) st.skip = true;
+    star = false;
+  }
+  flush();
+  return { text: parts.join(''), isHtml: fromHtml };
+}
+
+/* ================= .msg を読む ================= */
+function decodeBytes(b, charset) {
+  try { return new TextDecoder(charset || 'utf-8').decode(b); } catch { return new TextDecoder('utf-8').decode(b); }
+}
+function parseMsg(buf) {
+  const cfb = readCFB(buf);
+  const str = (base, id) => {
+    let b = cfb.read(`${base}__substg1.0_${id}001F`); if (b) return new TextDecoder('utf-16le').decode(b).replace(/\0+$/, '');
+    b = cfb.read(`${base}__substg1.0_${id}001E`); if (b) return decodeBytes(b, 'shift_jis').replace(/\0+$/, '');
+    return '';
+  };
+  const bin = (base, id) => cfb.read(`${base}__substg1.0_${id}0102`);
+  const subject = str('', '0037');
+  const senderName = str('', '0C1A') || str('', '0042');
+  // 送信日時（__properties の FILETIME）
+  let date = null;
+  const props = cfb.read('__properties_version1.0');
+  if (props) {
+    const dv = new DataView(props.buffer, props.byteOffset, props.byteLength);
+    for (let o = 32; o + 16 <= props.length; o += 16) {
+      const tag = dv.getUint32(o, true), id = tag >>> 16, type = tag & 0xFFFF;
+      if (type === 0x40 && (id === 0x0039 || id === 0x0E06)) {
+        const ms = (dv.getUint32(o + 12, true) * 4294967296 + dv.getUint32(o + 8, true)) / 1e4 - 11644473600000;
+        if (ms > 0) { date = new Date(ms); if (id === 0x0039) break; }
+      }
+    }
+  }
+  // 添付
+  const atts = [];
+  for (let i = 0; i < 500; i++) {
+    const base = `__attach_version1.0_#${i.toString(16).toUpperCase().padStart(8, '0')}/`;
+    const data = bin(base, '3701');
+    if (!data && !cfb.has(base + '__properties_version1.0')) break;
+    if (!data) continue;
+    atts.push({ name: str(base, '3707') || str(base, '3704'), mime: str(base, '370E'), cid: str(base, '3712'), data: data.slice() });
+  }
+  // 本文
+  let html = null, text = str('', '1000');
+  const h = bin('', '1013') || cfb.read('__substg1.0_1013001F');
+  if (h) html = cfb.has('__substg1.0_1013001F') && !bin('', '1013') ? new TextDecoder('utf-16le').decode(h) : decodeBytes(h, (new TextDecoder('latin1').decode(h.subarray(0, 2000)).match(/charset=["']?([\w-]+)/i) || [])[1]);
+  if (!html) {
+    const rtf = bin('', '1009');
+    if (rtf) { try { const r = deencapsulate(lzfu(rtf)); if (r.isHtml) html = r.text; } catch (e) { console.warn(e); } }
+  }
+  return { subject, sender: senderName, date, html, text, atts };
+}
+
+/* ================= .eml を読む ================= */
+function decodeWords(s) {
+  return s.replace(/=\?([^?]+)\?([BQbq])\?([^?]*)\?=(\s+(?==\?))?/g, (_, cs, enc, data) => {
+    let bytes;
+    if (enc.toUpperCase() === 'B') bytes = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+    else bytes = qpBytes(data.replace(/_/g, ' '));
+    return decodeBytes(bytes, cs);
+  });
+}
+function qpBytes(s) {
+  s = s.replace(/=\r?\n/g, ''); const out = [];
+  for (let i = 0; i < s.length; i++) {
+    if (s[i] === '=' && /^[0-9A-Fa-f]{2}$/.test(s.substr(i + 1, 2))) { out.push(parseInt(s.substr(i + 1, 2), 16)); i += 2; }
+    else out.push(s.charCodeAt(i) & 255);
+  }
+  return new Uint8Array(out);
+}
+function parseHeaders(raw) {
+  const h = {}; raw.replace(/\r?\n[ \t]+/g, ' ').split(/\r?\n/).forEach(l => { const m = l.match(/^([\w-]+):\s*(.*)$/); if (m) h[m[1].toLowerCase()] = m[2]; });
+  return h;
+}
+function param(v, name) { const m = (v || '').match(new RegExp(name + '\\s*=\\s*"?([^";]+)"?', 'i')); return m ? m[1] : null; }
+function parseEml(buf) {
+  const raw = new TextDecoder('latin1').decode(new Uint8Array(buf));
+  const res = { html: null, text: null, atts: [] };
+  const part = (src) => {
+    const sp = src.search(/\r?\n\r?\n/); const hraw = sp < 0 ? src : src.slice(0, sp);
+    const body = sp < 0 ? '' : src.slice(sp).replace(/^\r?\n\r?\n/, '');
+    const h = parseHeaders(hraw); const ct = (h['content-type'] || 'text/plain').toLowerCase();
+    if (ct.startsWith('multipart/')) {
+      const b = param(h['content-type'], 'boundary'); if (!b) return h;
+      body.split('--' + b).slice(1).forEach(p => { if (!p.startsWith('--')) part(p.replace(/^\r?\n/, '')); });
+      return h;
+    }
+    const enc = (h['content-transfer-encoding'] || '').toLowerCase();
+    let bytes;
+    if (enc === 'base64') { try { bytes = Uint8Array.from(atob(body.replace(/\s+/g, '')), c => c.charCodeAt(0)); } catch { bytes = new Uint8Array(0); } }
+    else if (enc === 'quoted-printable') bytes = qpBytes(body);
+    else bytes = Uint8Array.from(body, c => c.charCodeAt(0) & 255);
+    const disp = (h['content-disposition'] || '').toLowerCase();
+    if (ct.startsWith('text/html') && !disp.startsWith('attachment') && !res.html) res.html = decodeBytes(bytes, param(h['content-type'], 'charset'));
+    else if (ct.startsWith('text/plain') && !disp.startsWith('attachment') && !res.text) res.text = decodeBytes(bytes, param(h['content-type'], 'charset'));
+    else if (ct.startsWith('image/')) res.atts.push({ name: decodeWords(param(h['content-disposition'], 'filename') || param(h['content-type'], 'name') || ''), mime: ct.split(';')[0], cid: (h['content-id'] || '').replace(/[<>]/g, '').trim(), data: bytes });
+    return h;
+  };
+  const top = part(raw);
+  res.subject = decodeWords(top.subject || '');
+  const from = decodeWords(top.from || '');
+  res.sender = (from.match(/^\s*"?([^"<]+?)"?\s*</) || [])[1] || from.replace(/[<>]/g, '');
+  res.date = top.date ? new Date(top.date) : null;
+  if (res.date && isNaN(res.date)) res.date = null;
+  return res;
+}
+
+/* ================= メール本文 → 行のならび ================= */
+const BLOCK = new Set(['P', 'DIV', 'LI', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TR', 'BLOCKQUOTE', 'UL', 'OL', 'TABLE', 'PRE', 'SECTION', 'ARTICLE', 'HEADER', 'FOOTER', 'DL', 'DT', 'DD']);
+const SKIPTAG = new Set(['STYLE', 'SCRIPT', 'HEAD', 'TITLE', 'META', 'LINK', 'XML', 'NOSCRIPT', 'TEMPLATE']);
+function domToLines(root, resolveImg) {
+  const lines = []; let cur = null;
+  const end = () => { if (cur) lines.push(cur); cur = null; };
+  const ensure = () => cur || (cur = { type: 'text', text: '', list: false });
+  const walk = node => {
+    if (node.nodeType === 3) { ensure().text += node.nodeValue.replace(/\s*[\r\n]+\s*/g, ' '); return; }
+    if (node.nodeType !== 1) return;
+    const tag = node.tagName.toUpperCase();
+    if (SKIPTAG.has(tag)) return;
+    const style = (node.getAttribute('style') || '').toLowerCase();
+    if (/mso-list\s*:\s*ignore/.test(style) || /display\s*:\s*none/.test(style)) return;
+    if (tag === 'BR') { end(); return; }
+    if (tag === 'IMG') {
+      const src = resolveImg(node);
+      if (src) { end(); lines.push({ type: 'img', id: src }); }
+      return;
+    }
+    const block = BLOCK.has(tag);
+    if (block) {
+      end();
+      const isList = tag === 'LI' || /msolistparagraph/i.test(node.className || '') || /mso-list\s*:\s*l\d/.test(style);
+      cur = { type: 'text', text: '', list: isList };
+    }
+    const bold = tag === 'B' || tag === 'STRONG' || /font-weight\s*:\s*(bold|[6-9]00)/.test(style);
+    if (bold) ensure().text += '**';
+    node.childNodes.forEach(walk);
+    if (bold) ensure().text += '**';
+    if (block) end();
+  };
+  walk(root); end();
+  return lines;
+}
+function textToLines(t) { return t.replace(/\r\n?/g, '\n').split('\n').map(text => ({ type: 'text', text, list: false })); }
+
+/* ================= 行のならび → 資料の構造 ================= */
+const CJK = '[\\u3000-\\u30ff\\u3400-\\u9fff\\uff00-\\uffef]';
+function cleanText(s) {
+  return s.replace(/ /g, ' ')
+    .replace(new RegExp(`(${CJK}) +(?=${CJK})`, 'g'), '$1')
+    .replace(/\*\*\s*\*\*/g, '').replace(/\*{4,}/g, '**')
+    .replace(/^[ \t]+|[ \t]+$/g, '');
+}
+const plain = s => s.replace(/\*\*/g, '').trim();
+const RE_HEAD = /^[\s　]*[■□◆◇▼▽▶▷◎●]\s*(.+)$/;
+const RE_BRACKET_HEAD = /^[\s　]*【([^】]{1,30})】[\s　]*$/;
+const RE_BULLET = /^[\s　]*(?:[・•○◦▪▫－]|[-*＊](?=[\s　]))[\s　]*/;
+const RE_SIG = /^[\s　]*([＿_ー\-=─━～~*＊・◆◇■□★☆])\1{5,}/;
+const RE_GREET = /(お疲れ様|お疲れさま|おつかれさま|お世話になっ|こんにちは|おはようございます)/;
+const RE_ADDR = /(様|さん|各位|皆様|みなさま|皆さま|御中|殿|社長|部長|課長|係長|主任|室長|さま|くん|ちゃん|チーム|メンバー)[\s　、,]*$/;
+const RE_CLOSE = /^(以上(です|となります)?|よろしくお願い|宜しくお願い|何卒|引き続き|ご確認(の程)?よろしく|お手数)/;
+
+function structure(lines, meta, opts) {
+  lines = lines.map(l => l.type === 'text' ? { ...l, text: cleanText(l.text) } : l);
+  const blank = l => l.type === 'text' && !plain(l.text);
+  let author = '';
+  if (opts.strip) {
+    // 署名（区切り線）から下を外す
+    const firstText = lines.findIndex(l => !blank(l) && l.type === 'text');
+    let sig = lines.findIndex((l, i) => i > Math.max(firstText + 2, lines.length * 0.5) && l.type === 'text' && (RE_SIG.test(l.text) || /^--\s*$/.test(l.text)));
+    if (sig > 0) lines = lines.slice(0, sig);
+    // 末尾の締めのあいさつ
+    let k = lines.length - 1, removed = 0;
+    while (k >= 0 && removed < 4) {
+      const l = lines[k];
+      if (blank(l)) { k--; continue; }
+      if (l.type === 'text' && RE_CLOSE.test(plain(l.text))) { lines.splice(k, 1); removed++; k--; continue; }
+      break;
+    }
+    // 冒頭の宛名とあいさつ
+    let idx = 0, seen = 0, greet = -1;
+    for (; idx < lines.length && seen < 8; idx++) {
+      const l = lines[idx]; if (blank(l)) continue; if (l.type !== 'text') break; seen++;
+      if (RE_GREET.test(l.text)) { greet = idx; break; }
+    }
+    if (greet >= 0) {
+      const m = plain(lines[greet].text).match(/[、,。\s　]([^\s、,。！!]{1,10}?)(?:です|でございます)[。.!！]*$/);
+      if (m) author = m[1];
+      lines = lines.slice(greet + 1);
+    } else {
+      let cut = 0;
+      for (let i = 0; i < lines.length; i++) {
+        const l = lines[i]; if (blank(l)) continue;
+        const t = plain(l.text);
+        if (l.type === 'text' && t.length <= 24 && RE_ADDR.test(t) && !/[。]/.test(t)) cut = i + 1; else break;
+      }
+      lines = lines.slice(cut);
+    }
+  }
+  const blocks = [];
+  for (const l of lines) {
+    if (l.type === 'img') { blocks.push({ type: 'figure', id: l.id }); continue; }
+    if (blank(l)) continue;
+    const t = l.text.trim();
+    const bare = plain(t); // 見出しは太字でも太字でなくても同じ扱い
+    let m;
+    if (!l.list && (m = bare.match(RE_HEAD)) && m[1].length <= 40) blocks.push({ type: 'h', text: m[1].trim() });
+    else if (!l.list && (m = bare.match(RE_BRACKET_HEAD))) blocks.push({ type: 'h', text: m[1].trim() });
+    else if (l.list || RE_BULLET.test(t)) blocks.push({ type: 'li', text: t.replace(RE_BULLET, '') });
+    else if (/^[※＊]/.test(t)) blocks.push({ type: 'note', text: t });
+    else blocks.push({ type: 'p', text: t });
+  }
+  let subject = (meta.subject || '').trim();
+  let eyebrow = '';
+  subject = subject.replace(/^(\s*(RE|Re|re|FW|Fw|FWD|Fwd|転送|返信)\s*[:：]\s*)+/, '');
+  const em = subject.match(/^[【\[]([^】\]]{1,12})[】\]]\s*/);
+  if (em) { eyebrow = em[1]; subject = subject.slice(em[0].length); }
+  return {
+    eyebrow: eyebrow || '社内共有',
+    title: plain(subject) || '共有資料',
+    author: author || (meta.sender || '').replace(/@.*$/, ''),
+    date: meta.date,
+    blocks,
+  };
+}
+
+
+/* ================= アイコン ================= */
+const ICONS = {
+  idea: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
+  target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  calendar: '<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  chart: '<path d="M4 4v16h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/>',
+  settings: '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
+  check: '<circle cx="12" cy="12" r="8.5"/><path d="m8 12.5 2.6 2.6L16 9.5"/>',
+  users: '<circle cx="9" cy="8" r="3"/><path d="M3.5 19c.8-3 3-4.5 5.5-4.5s4.7 1.5 5.5 4.5"/><circle cx="17" cy="9" r="2.4"/><path d="M16.2 14.6c2 .2 3.6 1.6 4.3 4.4"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+  chat: '<path d="M4 5.5h16v10H9.5L5 19.5v-4H4z"/><path d="M8 10.5h8"/>',
+  rocket: '<path d="M12.5 15.5 8.5 11.5c1.2-4.3 4.6-7.7 11-8.5-.8 6.4-4.2 9.8-8.5 11z"/><path d="M8.5 11.5 5 12l2.5-3.5h3M12.5 15.5 12 19l3.5-2.5v-3"/><path d="M5.5 18.5c.5-1.5 1.3-2.3 2.5-2.5-.2 1.2-1 2-2.5 2.5z"/>',
+  alert: '<path d="M12 4 21 19.5H3z"/><path d="M12 10v4.5M12 17v.2"/>',
+  book: '<path d="M12 6.5C10 5 6.5 4.6 4 5.5v13c2.5-.9 6-.5 8 1M12 6.5c2-1.5 5.5-1.9 8-1v13c-2.5-.9-6-.5-8 1M12 6.5v13"/>',
+  mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="1.5"/><path d="m4 6.5 8 6 8-6"/>',
+  ai: '<rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 4.5V8"/><circle cx="12" cy="3.8" r="1"/><circle cx="9.5" cy="13" r=".9"/><circle cx="14.5" cy="13" r=".9"/><path d="M9.5 16.3h5M3 12.5v2.5M21 12.5v2.5"/>',
+  zap: '<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
+  list: '<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',
+  money: '<circle cx="12" cy="12" r="8.5"/><path d="M12 6.8v10.4M15 9.4c-.5-.9-1.6-1.4-3-1.4-1.7 0-3 .8-3 2s1.3 1.7 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.5-.5-3-1.4"/>',
+  flag: '<path d="M5.5 21V4M5.5 4h11l-2 4 2 4h-11"/>',
+  star: '<path d="m12 3.8 2.5 5.1 5.6.8-4 3.9 1 5.6-5.1-2.7-5 2.7.9-5.6-4-3.9 5.6-.8z"/>',
+  image: '<rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 18 5-5 4 4 3-3 4 4"/>',
+};
+const ICON_NAMES = Object.keys(ICONS);
+const icon = name => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ICONS.idea}</svg>`;
+const ICON_RULES = [
+  [/注意|リスク|気をつけ|禁止|社外秘/, 'alert'], [/目的|ねらい|狙い|ゴール/, 'target'], [/設定|方法|やり方|手順|使い方|登録/, 'settings'],
+  [/とは|概要|仕組み|ポイント/, 'idea'], [/取り組|実践|事例|活用/, 'rocket'], [/スケジュール|予定|日程|毎週|毎朝|毎日|定期/, 'calendar'],
+  [/時間|工数|効率|削減|短縮/, 'clock'], [/売上|数字|データ|分析|ヨミ|実績|報告/, 'chart'], [/顧客|お客様|チーム|メンバー|営業/, 'users'],
+  [/調べ|検索|情報収集|リサーチ|ニュース/, 'search'], [/AI|ChatGPT|Copilot|Gemini|Claude|自動/, 'ai'], [/メール|連絡/, 'mail'],
+  [/会議|議事録|相談|質問/, 'chat'], [/費用|料金|コスト|価格/, 'money'], [/まとめ|最後|おわりに|お願い/, 'flag'],
+];
+const pickIcon = (text, fallback = 'idea') => { for (const [re, n] of ICON_RULES) if (re.test(text || '')) return n; return fallback; };
+
+/* ================= 状態 ================= */
+const TONES = { indigo: ['24477A', 'E8EEF8'], green: ['1D6A51', 'E4F2EB'], orange: ['B0521B', 'FBEDE3'], purple: ['5B3F8C', 'EFE9F7'], gray: ['3D4756', 'EEF0F3'] };
+let current = null;   // { meta, lines, tail, ai, isSample }
+let layout = 'op';
+let sampleFn = null;
+let aiSeq = 0;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*\*/g, '');
+const fmtDate = d => d ? `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日` : '';
+const firstSentence = s => { const t = plain(s || ''); const m = t.match(/^.{6,70}?[。！？!?]/); return m ? m[0] : (t.length > 60 ? t.slice(0, 58) + '…' : t); };
+
+function buildDoc() {
+  const doc = structure(current.lines, current.meta, { strip: $('#o-strip').checked });
+  for (const t of current.tail || []) {
+    if (t.type === 'img') doc.blocks.push({ type: 'figure', id: t.id });
+    else doc.blocks.push({ type: 'h', text: t.text.replace(/^■/, '') });
+  }
+  for (const id of current.extra || []) if (images.has(id)) doc.blocks.push({ type: 'figure', id });
+  return doc;
+}
+
+/* ================= ルールで組むペライチ（AIが使えないときの土台） ================= */
+function ruleModel(doc) {
+  const groups = []; let g = { heading: '', blocks: [] };
+  for (const b of doc.blocks) {
+    if (b.type === 'h') { if (g.heading || g.blocks.length) groups.push(g); g = { heading: b.text, blocks: [] }; }
+    else g.blocks.push(b);
+  }
+  if (g.heading || g.blocks.length) groups.push(g);
+  let subtitle = '';
+  if (groups[0] && !groups[0].heading) {
+    const intro = groups.shift();
+    const i = intro.blocks.findIndex(b => b.type === 'p');
+    if (i >= 0) { subtitle = plain(intro.blocks[i].text); intro.blocks.splice(i, 1); }
+    if (intro.blocks.length) groups.unshift({ heading: 'はじめに', blocks: intro.blocks });
+  }
+  const toSection = gr => {
+    const all = gr.heading + ' ' + gr.blocks.map(b => b.text || '').join(' ');
+    const s = { heading: plain(gr.heading), icon: pickIcon(gr.heading, pickIcon(all)), type: 'text', paras: [], items: [], example: '', notes: [], figs: [] };
+    // メールの並び順のまま、段落・箇条書き・入力例・注記を流し込む
+    for (const b of gr.blocks) {
+      const last = s.paras[s.paras.length - 1];
+      if (b.type === 'p') { const t = plain(b.text); if (/^[「『].{8,}[」』]$/.test(t)) s.paras.push({ example: t.slice(1, -1) }); else s.paras.push(b.text); }
+      else if (b.type === 'li') { if (Array.isArray(last)) last.push(b.text); else s.paras.push([b.text]); }
+      else if (b.type === 'note') s.paras.push({ note: b.text });
+      else if (b.type === 'figure') s.figs.push({ id: b.id, caption: '' });
+    }
+    return s;
+  };
+  let sections = groups.map(toSection);
+  let cta = null;
+  const ci = sections.map(s => /目的|まとめ|最後|おわりに|お願い/.test(s.heading)).lastIndexOf(true);
+  if (ci >= 0 && !sections[ci].figs.length && sections[ci].paras.every(x => typeof x === 'string')) {
+    const s = sections.splice(ci, 1)[0];
+    cta = { title: s.heading, text: s.paras.filter(x => typeof x === 'string').map(plain).join('') };
+  }
+  const points = sections.filter(s => s.heading !== 'はじめに').slice(0, 3).map(s => ({ icon: s.icon, title: s.heading, text: firstSentence(s.paras.find(x => typeof x === 'string') || '') }));
+  return { category: current.meta.kind === 'text' ? '情報共有' : doc.eyebrow, title: doc.title, subtitle, points, sections, caution: '', cta, author: doc.author, date: doc.date, subject: plain(current.meta.subject || '') };
+}
+
+/* ================= AI の結果を整える ================= */
+function normalizeAi(r, doc, figIds) {
+  const S = v => typeof v === 'string' ? v.trim() : '';
+  const A = v => Array.isArray(v) ? v : [];
+  const I = v => ICON_NAMES.includes(v) ? v : null;
+  if (!r || typeof r !== 'object') throw new Error('bad');
+  const used = new Set();
+  const sections = A(r.sections).slice(0, 7).filter(s => s && typeof s === 'object').map(s => {
+    const heading = S(s.heading);
+    const sec = {
+      heading, icon: I(s.icon) || pickIcon(heading), type: ['text', 'bullets', 'cards', 'steps', 'example', 'compare', 'numbers', 'hub'].includes(s.type) ? s.type : 'text',
+      paras: A(s.paras).map(S).filter(Boolean),
+      items: A(s.items).map(i => typeof i === 'string' ? { title: '', text: i.trim() } : { title: S(i && i.title), text: S(i && i.text) }).filter(i => i.title || i.text).slice(0, 6),
+      example: S(s.example), notes: A(s.notes).map(S).filter(Boolean), figs: [], center: S(s.center),
+      columns: A(s.columns).map(c => S(String(c ?? ''))).slice(0, 4),
+      rows: A(s.rows).filter(Array.isArray).map(r => r.map(c => S(String(c ?? ''))).slice(0, 4)).slice(0, 7),
+    };
+    // 図の形が成り立たないときは一覧にしておく
+    if (sec.type === 'compare' && (sec.rows.length < 2 || sec.columns.length < 2)) sec.type = sec.items.length ? 'bullets' : 'text';
+    if (sec.type === 'hub' && (!sec.center || sec.items.length < 2)) sec.type = sec.items.length ? 'cards' : 'text';
+    if (sec.type === 'numbers' && !sec.items.length) sec.type = 'text';
+    if (sec.type === 'hub') sec.items = sec.items.slice(0, 6);
+    for (const im of A(s.images)) {
+      const n = +(typeof im === 'object' && im ? im.n : im);
+      const id = figIds[n - 1];
+      if (id && !used.has(id)) { used.add(id); sec.figs.push({ id, caption: S(im && im.caption) }); }
+    }
+    return sec;
+  }).filter(s => s.heading || s.paras.length || s.items.length || s.figs.length);
+  if (!sections.length) throw new Error('empty');
+  const left = figIds.filter(id => !used.has(id));
+  if (left.length) {
+    const host = [...sections].reverse().find(s => s.figs.length) || null;
+    if (host) left.forEach(id => host.figs.push({ id, caption: '' }));
+    else sections.push({ heading: '画面イメージ', icon: 'image', type: 'text', paras: [], items: [], example: '', notes: [], figs: left.map(id => ({ id, caption: '' })) });
+  }
+  const points = A(r.points).slice(0, 3).map(p => ({ icon: I(p && p.icon) || 'check', title: S(p && p.title), text: S(p && p.text) })).filter(p => p.title || p.text);
+  const cta = r.cta && (S(r.cta.title) || S(r.cta.text)) ? { title: S(r.cta.title), text: S(r.cta.text) } : null;
+  return { category: S(r.category) || doc.eyebrow, title: S(r.title) || doc.title, subtitle: S(r.subtitle), points, sections, caution: S(r.caution), cta,
+    author: doc.author, date: doc.date, subject: plain(current.meta.subject || ''), heroIcon: I(r.hero_icon) };
+}
+
+/* ================= 画像（図）の部品 ================= */
+const SIZE_LABEL = { l: '大', m: '中', s: '小' };
+const FIG_TOOLS = '<div class="fig-x" contenteditable="false">' +
+  '<button type="button" data-act="up" title="上へ移動" aria-label="上へ移動">↑</button>' +
+  '<button type="button" data-act="down" title="下へ移動" aria-label="下へ移動">↓</button>' +
+  '<button type="button" data-act="size" title="大きさを変える（大・中・小）" aria-label="大きさを変える">大</button>' +
+  '<button type="button" data-act="del" title="この画像を外す" aria-label="この画像を外す">×</button></div>';
+function figMarkup(id, n, caption, cls = '') {
+  const im = images.get(id); if (!im) return '';
+  return `<figure class="${cls}" data-r="fig" data-img="${id}" data-size="l" contenteditable="false"><img src="${im.url}" alt="図${n}"><figcaption contenteditable="true"><b>図${n}</b><span>${esc(caption || '')}</span></figcaption>${FIG_TOOLS}</figure>`;
+}
+
+/* ================= 描画：ペライチ ================= */
+const DECO = '<svg class="deco" viewBox="0 0 300 300" aria-hidden="true" fill="none" stroke="#ffffff" stroke-width="1.5"><circle cx="150" cy="150" r="140"/><circle cx="150" cy="150" r="108"/><circle cx="150" cy="150" r="76"/><circle cx="150" cy="150" r="44"/><path d="M10 150h280M150 10v280"/></svg>';
+function renderOp(m) {
+  let fig = 0;
+  const figHtml = f => {
+    const im = images.get(f.id); if (!im) return '';
+    fig++;
+    return figMarkup(f.id, fig, f.caption, 'op-fig');
+  };
+  const heroIcon = m.heroIcon || pickIcon(m.title + ' ' + m.subtitle, (m.sections[0] && m.sections[0].icon) || 'idea');
+  const meta = [m.author ? `<span>共有者：${esc(m.author)}</span>` : '', m.date ? `<span>${fmtDate(m.date)}</span>` : ''].join('');
+  let h = `<header class="op-hero">${DECO}<div>
+    <div class="op-cat" data-r="cat">${esc(m.category)}</div>
+    <h1 class="op-title" data-r="title">${inline(m.title)}</h1>
+    ${m.subtitle ? `<p class="op-sub" data-r="sub">${inline(m.subtitle)}</p>` : ''}
+    ${meta ? `<div class="op-meta" data-r="meta">${meta}</div>` : ''}
+  </div><div class="op-emblem" contenteditable="false">${icon(heroIcon)}</div></header><div class="op-main">`;
+  if (m.points.length) {
+    h += `<section><p class="op-label" data-r="label">この資料のポイント</p><div class="op-points" style="--n:${m.points.length}">` +
+      m.points.map((p, i) => `<div class="op-point" data-r="point"><div class="head" contenteditable="false">${icon(p.icon)}<span class="num">POINT ${i + 1}</span></div><div class="t">${inline(p.title)}</div><div class="x">${inline(p.text)}</div></div>`).join('') +
+      '</div></section>';
+  }
+  for (const s of m.sections) {
+    let body = '';
+    const checks = arr => {
+      const short = arr.length >= 4 && arr.every(it => plain((it.title ? it.title + '：' : '') + it.text).length <= 24);
+      return `<ul class="op-checks${short ? ' two' : ''}">${arr.map(it => `<li data-r="li">${icon('check')}<span>${it.title ? `<strong>${inline(it.title)}</strong>：` : ''}${inline(it.text)}</span></li>`).join('')}</ul>`;
+    };
+    const bubble = t => `<div class="op-example" data-r="example"><div class="lab" contenteditable="false">${icon('chat')}入力例</div><div class="op-bubble">${inline(t)}</div></div>`;
+    s.paras.forEach(p => {
+      if (Array.isArray(p)) body += checks(p.map(t => ({ title: '', text: t })));
+      else if (p && p.example) body += bubble(p.example);
+      else if (p && p.note) body += `<p class="op-note" data-r="note">${inline(p.note)}</p>`;
+      else body += `<p data-r="p">${inline(p)}</p>`;
+    });
+    if (s.items.length && !['numbers', 'hub', 'compare'].includes(s.type)) {
+      if (s.type === 'cards') body += `<div class="op-cards">${s.items.map(it => `<div class="op-card" data-r="card"><div class="t">${inline(it.title || '')}</div><div class="x">${inline(it.text)}</div></div>`).join('')}</div>`;
+      else if (s.type === 'steps') body += `<div class="op-steps">${s.items.map((it, i) => `<div class="op-step" data-r="step"><span class="n">STEP ${i + 1}</span><div class="t">${inline(it.title || it.text)}</div>${it.title && it.text ? `<div class="x">${inline(it.text)}</div>` : ''}</div>`).join('')}</div>`;
+      else body += checks(s.items);
+    }
+    if (s.type === 'compare') {
+      const cols = s.columns, w = cols.length;
+      body += `<div class="op-tablewrap"><table class="op-table" data-r="table"><thead><tr>${cols.map(c => `<th>${inline(c)}</th>`).join('')}</tr></thead><tbody>` +
+        s.rows.map(r => `<tr>${Array.from({ length: w }, (_, i) => i === 0 ? `<th>${inline(r[0] || '')}</th>` : `<td>${inline(r[i] || '')}</td>`).join('')}</tr>`).join('') + '</tbody></table></div>';
+    } else if (s.type === 'numbers') {
+      body += `<div class="op-nums">${s.items.map(it => `<div class="op-num" data-r="num"><div class="t">${inline(it.title)}</div><div class="x">${inline(it.text)}</div></div>`).join('')}</div>`;
+    } else if (s.type === 'hub') {
+      const half = Math.ceil(s.items.length / 2);
+      body += `<div class="op-hub" style="--rows:${half}"><div class="hub-c" data-r="hubc">${inline(s.center)}</div>` +
+        s.items.map((it, i) => `<div class="hub-n ${i < half ? 'l' : 'r'}" data-r="card" style="grid-row:${(i % half) + 1}"><div class="t">${inline(it.title)}</div>${it.text ? `<div class="x">${inline(it.text)}</div>` : ''}</div>`).join('') + '</div>';
+    }
+    if (s.example) body += bubble(s.example);
+    s.notes.forEach(n => { body += `<p class="op-note" data-r="note">${inline(n)}</p>`; });
+    const textLen = plain(JSON.stringify(s.paras) + s.items.map(i => i.title + i.text).join('') + s.example).length;
+    if (s.figs.length === 1 && textLen > 0 && textLen < 260 && !['cards', 'steps', 'compare', 'numbers', 'hub'].includes(s.type)) {
+      body = `<div class="op-split"><div class="op-body" style="padding-left:0">${body}</div><div class="op-figs">${figHtml(s.figs[0])}</div></div>`;
+    } else if (s.figs.length) {
+      body += `<div class="op-figs${s.figs.length >= 2 ? ' two' : ''}">${s.figs.map(figHtml).join('')}</div>`;
+    }
+    h += `<section class="op-sec">${s.heading ? `<div class="sh"><span class="badge-ic" contenteditable="false">${icon(s.icon)}</span><h2 data-r="h">${inline(s.heading)}</h2></div>` : ''}<div class="op-body">${body}</div></section>`;
+  }
+  if (m.caution) h += `<div class="op-caution" data-r="caution">${icon('alert')}<div><b contenteditable="false">注意</b><span>${inline(m.caution)}</span></div></div>`;
+  h += '</div>';
+  if (m.cta) h += `<div class="op-cta" data-r="cta"><div class="ic-wrap" contenteditable="false">${icon('rocket')}</div><div><div class="t">${inline(m.cta.title)}</div><div class="x">${inline(m.cta.text)}</div></div></div>`;
+  const src = current.meta.kind === 'text' ? [current.meta.url ? `出典：${esc(current.meta.url)}` : '', m.date ? `作成日 ${fmtDate(m.date)}` : ''].filter(Boolean).join('　') : [m.subject ? `元メール「${esc(m.subject)}」` : '', m.author ? `${esc(m.author)}${/^[\x00-\x7F]+$/.test(m.author) ? '' : 'さん'}の共有より` : '', m.date ? fmtDate(m.date) : ''].filter(Boolean).join('　');
+  h += `<div class="op-foot" data-r="foot">${src || '社内共有資料'}</div>`;
+  return h;
+}
+
+/* ================= 描画：メール文面どおり ================= */
+function renderPlain(doc) {
+  let h = `<div class="plain-doc"><div class="cat" data-r="cat">${esc(doc.eyebrow)}</div><h1 data-r="title">${esc(doc.title)}</h1>`;
+  const meta = [doc.author ? `共有者：${esc(doc.author)}` : '', doc.date ? `日付：${fmtDate(doc.date)}` : ''].filter(Boolean);
+  if (meta.length) h += `<div class="meta" data-r="meta">${meta.map(x => `<span>${x}</span>`).join('')}</div>`;
+  h += '<div class="body">';
+  let inList = false, fig = 0;
+  for (const b of doc.blocks) {
+    if (b.type !== 'li' && inList) { h += '</ul>'; inList = false; }
+    if (b.type === 'h') h += `<h2 data-r="h">${inline(b.text)}</h2>`;
+    else if (b.type === 'li') { if (!inList) { h += '<ul>'; inList = true; } h += `<li data-r="li">${inline(b.text)}</li>`; }
+    else if (b.type === 'note') h += `<p class="note" data-r="note">${inline(b.text)}</p>`;
+    else if (b.type === 'p') h += `<p data-r="p">${inline(b.text)}</p>`;
+    else if (b.type === 'figure') {
+      const im = images.get(b.id); if (!im) continue; fig++;
+      h += figMarkup(b.id, fig, '');
+    }
+  }
+  if (inList) h += '</ul>';
+  return h + '</div></div>';
+}
+
+const EMPTY = `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20z"/><path d="M14 3.5V8h4M10 12h5M10 15.5h5"/></svg>
+  <strong>ここに資料ができます</strong><p>左でメール（.msg / .eml）を読み込むか、<br>Web記事などの文章を貼り付けてください。</p></div>`;
+function render() {
+  $('#clear').hidden = !current || current.isSample;
+  updateExportUi();
+  if (!current) { const p = $('#paper'); p.innerHTML = EMPTY; p.removeAttribute('contenteditable'); $('#ai').hidden = true; scheduleGuides(); return; }
+  const doc = buildDoc();
+  const paper = $('#paper');
+  paper.innerHTML = layout === 'op' ? renderOp(current.ai || ruleModel(doc)) : renderPlain(doc);
+  paper.setAttribute('contenteditable', 'true');
+  paper.spellcheck = false;
+  $('#ai').hidden = !sampleFn || current.isSample || layout !== 'op';
+  paper.querySelectorAll('img').forEach(i => { if (!i.complete) i.addEventListener('load', scheduleGuides, { once: true }); });
+  scheduleGuides();
+}
+const FLOW = '.op-body, .plain-doc .body, .op-main, .op-figs';
+function tidyFigs() {
+  const paper = $('#paper');
+  paper.querySelectorAll('.op-figs').forEach(g => {
+    if (!g.children.length) { const split = g.closest('.op-split'); if (split) split.replaceWith(...split.querySelector('.op-body').childNodes); else g.remove(); }
+    else g.classList.toggle('two', g.children.length >= 2);
+  });
+  paper.querySelectorAll('figure figcaption b').forEach((b, i) => { b.textContent = '図' + (i + 1); });
+}
+function moveFig(f, dir) {
+  const parent = f.parentElement;
+  const sib = dir < 0 ? f.previousElementSibling : f.nextElementSibling;
+  if (sib) { if (dir < 0) sib.before(f); else sib.after(f); return; }
+  // 枠の端まで来たら、外側の流れへ出る
+  const box = parent.closest('.op-split') || (parent.classList.contains('op-figs') ? parent : null);
+  if (box) { if (dir < 0) box.before(f); else box.after(f); return; }
+  const sec = parent.closest('.op-sec');
+  if (!sec) return;
+  let s2 = dir < 0 ? sec.previousElementSibling : sec.nextElementSibling;
+  while (s2 && !s2.classList.contains('op-sec')) s2 = dir < 0 ? s2.previousElementSibling : s2.nextElementSibling;
+  const body = s2 && s2.querySelector(':scope > .op-body');
+  if (body) { if (dir < 0) body.append(f); else body.prepend(f); }
+}
+$('#paper').addEventListener('click', e => {
+  const btn = e.target.closest('.fig-x button'); if (!btn) return;
+  e.preventDefault();
+  const f = btn.closest('figure'), act = btn.dataset.act;
+  if (act === 'del') {
+    if (current && current.extra) current.extra = current.extra.filter(id => id !== f.dataset.img);
+    f.remove();
+  } else if (act === 'size') {
+    const next = { l: 'm', m: 's', s: 'l' }[f.dataset.size || 'l'];
+    f.dataset.size = next; btn.textContent = SIZE_LABEL[next];
+  } else moveFig(f, act === 'up' ? -1 : 1);
+  tidyFigs(); scheduleGuides();
+  if (act !== 'del') f.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+});
+
+/* ================= 画像の差し込み ================= */
+let lastRange = null;
+document.addEventListener('selectionchange', () => {
+  const sel = getSelection();
+  if (sel.rangeCount && $('#paper').contains(sel.anchorNode)) lastRange = sel.getRangeAt(0).cloneRange();
+});
+function insertFigure(blob, range) {
+  if (!current) { setStatus('先に資料を作ってから、画像を差し込んでください。', true); return; }
+  const paper = $('#paper');
+  const id = addImage(blob);
+  (current.extra = current.extra || []).push(id);
+  const tmp = document.createElement('div');
+  tmp.innerHTML = figMarkup(id, 0, '', layout === 'op' ? 'op-fig' : '');
+  const fig = tmp.firstElementChild;
+  let el = range && paper.contains(range.startContainer) ? range.startContainer : null;
+  if (el && el.nodeType !== 1) el = el.parentElement;
+  while (el && el !== paper && !(el.parentElement && el.parentElement.matches(FLOW))) el = el.parentElement;
+  if (el && el !== paper) {
+    const body = el.parentElement.matches('.op-main') && el.querySelector(':scope > .op-body');
+    if (body) body.prepend(fig); else el.after(fig);
+  } else {
+    const bodies = paper.querySelectorAll('.op-sec > .op-body, .plain-doc .body');
+    (bodies[bodies.length - 1] || paper.querySelector('.op-main') || paper).append(fig);
+  }
+  tidyFigs(); scheduleGuides();
+  fig.classList.add('flash');
+  fig.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  setStatus('画像を差し込みました。↑↓で位置、「大」で大きさを変えられます。説明は「図」の横をクリックして書けます。');
+}
+$('#ins-img').addEventListener('click', () => { if (!current) { setStatus('先に資料を作ってから、画像を差し込んでください。', true); return; } $('#ins-file').click(); });
+$('#ins-file').addEventListener('change', e => { const r = lastRange; [...e.target.files].reverse().forEach(f => insertFigure(f, r)); e.target.value = ''; });
+$('#paper').addEventListener('paste', e => {
+  const cd = e.clipboardData; if (!cd || !current) return;
+  e.preventDefault();
+  const files = [...cd.files].filter(f => f.type.startsWith('image/'));
+  const sel = getSelection(), r = sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+  if (files.length) { files.reverse().forEach(f => insertFigure(f, r)); return; }
+  const text = cd.getData('text/plain'); if (text) document.execCommand('insertText', false, text);
+});
+$('#paper').addEventListener('dragover', e => { if (current && [...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+$('#paper').addEventListener('drop', e => {
+  const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+  if (!files.length || !current) return;
+  e.preventDefault(); e.stopPropagation();
+  const r = document.caretRangeFromPoint ? document.caretRangeFromPoint(e.clientX, e.clientY) : null;
+  files.reverse().forEach(f => insertFigure(f, r));
+});
+
+/* ================= 用紙・ページ数 ================= */
+let orient = 'port', pagesSel = '1';
+const DENS = {
+  '1': 'A4一枚に収まる分量。sections は3〜4個で、各セクションは短く要点だけ。',
+  '2': 'A4二枚分。sections は4〜6個。各セクションに説明の段落を1〜2つ付け、元の文章の具体例や補足も拾う。',
+  '3': 'A4三枚分。sections は5〜8個。元の文章の内容をなるべく省かず、各セクションに説明の段落を2〜3つ付ける。',
+  'auto': 'sections は3〜6個。元の文章の分量に合わせる。',
+};
+const pageDims = () => orient === 'land' ? { PW: 1123, PH: 794 } : { PW: 794, PH: 1123 };
+const ATOMIC = 'p, li, figure, h1, h2, .sh, .op-hero, .op-point, .op-card, .op-step, .op-steps, .op-num, .op-table tr, .op-hub, .op-caution, .op-example, .op-cta, .op-foot, .plain-doc .meta, .plain-doc .cat';
+// 段落・画像・図の途中で切らずに、指定ページ数に収まる縮小率と切れ目を求める（root の px 単位）
+function planPages(root, N) {
+  const { PW, PH } = pageDims(), MT = 36, MB = 40;
+  const box = root.getBoundingClientRect(), u = PW / box.width, total = Math.ceil(box.height);
+  const spans = [...root.querySelectorAll(ATOMIC)].map(el => { const r = el.getBoundingClientRect(); return [r.top - box.top, r.bottom - box.top]; }).filter(([a, b]) => b > a);
+  const cand = new Set();
+  spans.forEach(([a, b]) => { cand.add(Math.round(b) + 3); cand.add(Math.round(a) - 3); });
+  const cuts = [...cand].filter(y => y > 0 && y < total && !spans.some(([a, b]) => y > a + 1 && y < b - 1)).sort((x, y) => x - y);
+  const paginate = k => {
+    const pages = []; let start = 0;
+    while (start < total - 2 && pages.length < 60) {
+      const cap = (PH - (pages.length ? MT : 0) - MB) / (u * k), limit = start + cap;
+      if (limit >= total) { pages.push([start, total]); break; }
+      const fit = cuts.filter(c => c > start + cap * 0.25 && c <= limit);
+      const end = fit.length ? fit[fit.length - 1] : limit;
+      pages.push([start, end]); start = end;
+    }
+    return pages;
+  };
+  if (N === 'auto') return { k: 1, u, pages: paginate(1) };
+  let k = Math.min(1, N * (PH - MB) / (total * u)), pages = paginate(k);
+  while (pages.length > N && k > 0.3) { k *= 0.96; pages = paginate(k); }
+  return { k, u, pages };
+}
+let guideTimer = null;
+function scheduleGuides() { clearTimeout(guideTimer); guideTimer = setTimeout(updateGuides, 250); }
+function updateGuides() {
+  const wrap = $('#paper-wrap'), paper = $('#paper'), info = $('#fit-info');
+  wrap.querySelectorAll('.pg-guide').forEach(g => g.remove());
+  if (!current) { info.hidden = true; return; }
+  const plan = planPages(paper, pagesSel === 'auto' ? 'auto' : +pagesSel);
+  let msg = `A4${orient === 'land' ? '横' : '縦'}・${plan.pages.length}ページ`;
+  if (plan.k < 0.98) msg += plan.k < 0.62 ? '（文字がかなり小さくなります。ページ数を増やすか内容を減らしてください）' : '（収まるように縮小して出力します）';
+  info.textContent = msg; info.hidden = false; info.classList.toggle('warn', plan.k < 0.62);
+  plan.pages.slice(0, -1).forEach(([, b], i) => {
+    const g = document.createElement('div'); g.className = 'pg-guide';
+    g.style.cssText = `top:${paper.offsetTop + b}px;left:${paper.offsetLeft}px;width:${paper.offsetWidth}px`;
+    g.innerHTML = `<span>ここから${i + 2}ページ目</span>`;
+    wrap.appendChild(g);
+  });
+}
+function segPick(sel, v) { document.querySelectorAll(sel + ' button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v)); }
+$('#orient-seg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  orient = b.dataset.v; segPick('#orient-seg', orient);
+  $('#paper').dataset.orient = orient; scheduleGuides();
+});
+$('#pages-seg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.dataset.v === pagesSel) return;
+  pagesSel = b.dataset.v; segPick('#pages-seg', pagesSel);
+  $('#paper').dataset.pages = pagesSel;
+  if (current && !current.isSample && layout === 'op' && !sampleFn && current.aiCache && current.aiCache[pagesSel]) { current.ai = current.aiCache[pagesSel]; render(); }
+  else if (current && !current.isSample && layout === 'op' && !sampleFn && current.ai) { setStatus('ページ数に合わせるには、もう一度「依頼文をコピー」からチャットのAIに頼んでください。'); scheduleGuides(); }
+  else if (current && !current.isSample && layout === 'op' && sampleFn) {
+    const cached = current.aiCache && current.aiCache[pagesSel];
+    if (cached) { current.ai = cached; render(); setStatus(`${pagesSel === 'auto' ? '自動' : pagesSel + '枚'}用の構成に切り替えました。`); }
+    else runAi();
+  } else scheduleGuides();
+});
+window.addEventListener('resize', scheduleGuides);
+$('#paper').addEventListener('input', scheduleGuides);
+$('#o-strip').addEventListener('change', render);
+function setLayout(l) {
+  layout = l;
+  $('#lay-op').setAttribute('aria-pressed', l === 'op'); $('#lay-plain').setAttribute('aria-pressed', l === 'plain');
+  render();
+  if (l === 'op' && current && !current.ai && !current.isSample) runAi();
+}
+$('#lay-op').addEventListener('click', () => setLayout('op'));
+$('#lay-plain').addEventListener('click', () => setLayout('plain'));
+$('#swatches').addEventListener('click', e => {
+  const b = e.target.closest('.swatch'); if (!b) return;
+  $('#paper').dataset.tone = b.dataset.tone;
+  document.querySelectorAll('.swatch').forEach(s => s.setAttribute('aria-pressed', s === b));
+});
+
+/* ================= AI でペライチに組み直す ================= */
+function toJpeg(id, maxBytes) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1400 / img.naturalWidth);
+      const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(b => b && (!maxBytes || b.size <= maxBytes) ? resolve(b) : reject(new Error('too big')), 'image/jpeg', 0.85);
+    };
+    img.onerror = reject; img.src = images.get(id).url;
+  });
+}
+function aiInput() {
+  const doc = structure(current.lines, current.meta, { strip: true });
+  for (const t of current.tail || []) if (t.type === 'img') doc.blocks.push({ type: 'figure', id: t.id });
+  for (const id of current.extra || []) if (images.has(id)) doc.blocks.push({ type: 'figure', id });
+  const key = pagesSel;
+  const figIds = doc.blocks.filter(b => b.type === 'figure').map(b => b.id);
+  const body = doc.blocks.map(b => b.type === 'h' ? '■' + plain(b.text) : b.type === 'li' ? '・' + plain(b.text) :
+    b.type === 'figure' ? `【画像${figIds.indexOf(b.id) + 1}】` : plain(b.text)).join('\n').slice(0, 14000);
+  return { doc, key, figIds, body };
+}
+async function runAi(force) {
+  if (!sampleFn || !current || current.isSample) return;
+  const token = ++aiSeq;
+  const inp = aiInput(), { doc, key, figIds } = inp;
+  let imgs = [];
+  try {
+    const lim = await sampleFn.limits();
+    if (lim && lim.images && figIds.length) {
+      const max = lim.images.maxCount || 4;
+      imgs = (await Promise.all(figIds.slice(0, max).map(id => toJpeg(id, lim.images.maxBytes).catch(() => null)))).filter(Boolean);
+      if (imgs.length !== Math.min(max, figIds.length)) imgs = [];
+    }
+  } catch { imgs = []; }
+  const prompt = aiPrompt(inp, imgs.length, false);
+  $('#ai-badge').hidden = false; $('#ai').disabled = true;
+  setStatus(`AIが${key === 'auto' ? '' : key + '枚の'}資料に組み直しています…（20秒ほどかかります）`);
+  try {
+    const opts = { modelTier: 'default' };
+    if (imgs.length) opts.images = imgs;
+    if (force) opts.cache = false;
+    const r = await sampleFn.json(prompt, opts);
+    if (token !== aiSeq) return;
+    applyAi(r, doc, figIds, key);
+    setStatus('ペライチに組み直しました。内容を確認して、必要ならクリックして直してください。');
+  } catch (e) {
+    if (token !== aiSeq) return;
+    console.warn(e);
+    const why = e && e.code === 'not_granted' ? 'AIの利用が許可されていないため、' : e && e.code === 'rate_limited' ? 'AIが混み合っているため、' : 'AIで組み直せなかったため、';
+    setStatus(why + '見出しをもとに組み立てています。「チャットのAIに頼む」を使うと、AIで組み直せます。', e && e.code !== 'not_granted');
+    openManual();
+  } finally {
+    if (token === aiSeq) { $('#ai-badge').hidden = true; $('#ai').disabled = false; }
+  }
+}
+function applyAi(r, doc, figIds, key) {
+  current.ai = normalizeAi(r, doc, figIds);
+  (current.aiCache = current.aiCache || {})[key] = current.ai;
+  if (layout !== 'op') setLayout('op'); else render();
+}
+function aiPrompt({ key, body }, imgCount, manual) {
+  const isMail = current.meta.kind !== 'text';
+  return `あなたは社内向け資料の編集者です。下の${isMail ? '社内共有メール' : '文章（Web記事・メモなどのコピー）'}を、社内でA4一枚で配れる「ペライチ資料」の構成に組み直してください。
+
+ルール:
+- 元の文章に書かれていない事実・数字・機能・効果は足さない。要約・言い換え・並べ替え・見出し付けはしてよい。固有名詞はそのまま使う。
+- 宛名、あいさつ、署名、「以上です」、Webページのメニュー・広告・関連記事・SNSボタンなどの文言は入れない。一人称の語り（「僕が」など）は資料らしく「〜しています」など中立な書き方に整える。
+- です・ます調で短く。1文はおおむね60字以内。
+- title は内容がひと目でわかる25字以内。subtitle は「読むと何がわかる・何ができるか」を45字以内で。
+- points は読み手が最初に押さえるべき要点をちょうど3つ（title 14字以内、text 45字以内）。
+- 分量: ${DENS[key]}
+- heading は18字以内（「■」は付けない）。
+  type は内容に合わせて選ぶ:
+   "steps" 手順・流れ（items 2〜4個）
+   "cards" 具体例・種類・使い方が並ぶ（items に title と text）
+   "compare" 2〜3個のものを観点ごとに比べられる（columns に ["観点","A","B"]、rows に ["観点名","Aの内容","Bの内容"] を3〜6行）
+   "numbers" 元の文章にある数字・割合・金額・期間を強調（items の title に数字そのもの、text に何の数字か。元にない数字は作らない）
+   "hub" 1つの中心テーマと、その要素・効果・関係者の関係（center に中心の言葉、items に3〜6個）
+   "bullets" 確認項目の羅列　"text" ふつうの説明
+  読み手が図でひと目でわかるよう、少なくとも2つのセクションは steps / cards / compare / numbers / hub のどれかにする（内容に合うものだけ）。
+  ChatGPTなどへの入力例・依頼文があれば、そのセクションの example に原文のまま入れる。
+- 本文中の【画像N】は画像の位置です。すべての画像を、内容が合うセクションの images に1回ずつ入れ、caption にその画像で何がわかるかを30字以内で書く。${imgCount ? `画像は${imgCount}枚、【画像1】から順に添付しているので中身も見て説明する。` : manual ? '画像そのものは渡していないので、【画像N】の前後の文章から何を示す画像かを判断して説明する。' : ''}
+- 注意点・リスクの記述があれば caution に1〜2文で（なければ空文字）。
+- cta は読み手に取ってほしい次の行動（title 20字以内、text 60字以内）。
+- icon と hero_icon は次から選ぶ: ${ICON_NAMES.join(', ')}
+
+${manual ? '回答はJSONだけにしてください。前置き・説明・まとめの文は書かないでください。' : 'JSONだけを返してください。'}形式:
+{"category":"10字以内のラベル（例：ノウハウ共有）","title":"","subtitle":"","hero_icon":"",
+ "points":[{"icon":"","title":"","text":""}],
+ "sections":[{"heading":"","icon":"","type":"text|bullets|cards|steps|compare|numbers|hub","paras":[""],"items":[{"title":"","text":""}],"center":"","columns":[],"rows":[],"example":"","images":[{"n":1,"caption":""}]}],
+ "caution":"","cta":{"title":"","text":""}}
+
+${isMail ? '件名' : 'タイトル（空なら内容から付ける）'}: ${plain(current.meta.subject || '')}
+${current.meta.url ? '出典URL: ' + current.meta.url + '\n' : ''}本文:
+${body}`;
+}
+$('#ai').addEventListener('click', () => runAi(true));
+if (window.claude && window.claude.use) {
+  window.claude.use('sample').then(s => {
+    sampleFn = s;
+    if (!s) { $('#ai-hint').textContent = 'この表示ではAIを直接使えません。上の「チャットのAIに頼む」を使うと、無料版のClaudeでもAIで組み直せます。'; openManual(); return; }
+    if (current) { render(); if (!current.ai && !current.isSample && layout === 'op') runAi(); }
+  });
+} else {
+  $('#ai-hint').textContent = 'この公開版ではAIを直接使えません。上の「チャットのAIに頼む」を使うと、無料版のClaudeでもAIで組み直せます（使わない場合は見出しをもとに組み立てます）。';
+  openManual();
+}
+
+/* ================= チャットのAIに頼む（API なしで AI を使う） ================= */
+function openManual() { $('#manual').open = true; }
+let manualReq = null;
+$('#m-copy').addEventListener('click', async () => {
+  if (!current || current.isSample) { setStatus('先にメールや文章を読み込んでください。', true); return; }
+  const inp = aiInput();
+  manualReq = { key: inp.key };
+  const prompt = aiPrompt(inp, 0, true);
+  const box = $('#m-prompt');
+  try { await navigator.clipboard.writeText(prompt); box.hidden = true; setStatus('依頼文をコピーしました。Claudeのチャットに貼り付けて送ってください。'); }
+  catch { box.hidden = false; box.value = prompt; box.focus(); box.select(); setStatus('下の依頼文を選択済みです。Ctrl+C（⌘+C）でコピーしてください。'); }
+});
+function parseAnswer(text) {
+  let t = String(text || '').replace(/```(?:json)?/gi, '');
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a < 0 || b <= a) throw new Error('no json');
+  t = t.slice(a, b + 1).replace(/[“”]/g, '"').replace(/,\s*([}\]])/g, '$1');
+  return JSON.parse(t);
+}
+$('#m-apply').addEventListener('click', () => {
+  if (!current || current.isSample) { setStatus('先にメールや文章を読み込んでください。', true); return; }
+  let r;
+  try { r = parseAnswer($('#m-answer').value); }
+  catch { setStatus('回答を読み取れませんでした。AIの回答を最初の { から最後の } まで、全部コピーして貼り付けてください。', true); return; }
+  try {
+    const inp = aiInput();
+    const key = manualReq ? manualReq.key : inp.key;
+    aiSeq++; $('#ai-badge').hidden = true;
+    applyAi(r, inp.doc, inp.figIds, key);
+    $('#m-answer').value = '';
+    setStatus('AIの回答を反映しました。内容を確認して、必要ならクリックして直してください。');
+  } catch (e) { console.warn(e); setStatus('回答の形が想定と違うため反映できませんでした。もう一度「依頼文をコピー」からやり直してください。', true); }
+});
+
+/* ================= 入力：ファイル ================= */
+function attsToLines(mail) {
+  const byCid = new Map(), byName = new Map(), used = new Set();
+  mail.atts.forEach(a => {
+    if (!/^image\//i.test(a.mime || '') && !/\.(png|jpe?g|gif|webp|bmp)$/i.test(a.name || '')) return;
+    if (a.cid) byCid.set(a.cid.replace(/[<>]/g, '').toLowerCase(), a);
+    if (a.name) byName.set(a.name.toLowerCase(), a);
+  });
+  const ids = new Map();
+  const idFor = a => { if (!ids.has(a)) ids.set(a, addImage(new Blob([a.data], { type: a.mime || 'image/png' }))); used.add(a); return ids.get(a); };
+  let lines;
+  if (mail.html) {
+    const d = new DOMParser().parseFromString(mail.html, 'text/html');
+    lines = domToLines(d.body, img => {
+      const src = img.getAttribute('src') || '';
+      const m = src.match(/^cid:(.+)$/i);
+      let a = m ? byCid.get(decodeURIComponent(m[1]).toLowerCase()) : null;
+      if (!a) a = byName.get(src.split(/[\\/]/).pop().toLowerCase());
+      return a ? idFor(a) : null;
+    });
+  } else lines = textToLines(mail.text || '');
+  // 本文中に出てこない画像添付は、署名除去の影響を受けないよう別枠で最後に載せる
+  const rest = [...new Set([...byName.values(), ...byCid.values()])].filter(a => !used.has(a));
+  const tail = rest.length ? [{ type: 'text', text: '■添付画像' }, ...rest.map(a => ({ type: 'img', id: idFor(a) }))] : [];
+  return { lines, tail };
+}
+async function loadFile(f) {
+  setStatus('読み込み中…');
+  try {
+    const buf = await f.arrayBuffer();
+    const isMsg = buf.byteLength >= 4 && new DataView(buf).getUint32(0, true) === 0xE011CFD0;
+    const mail = isMsg ? parseMsg(buf) : parseEml(buf);
+    const { lines, tail } = attsToLines(mail);
+    current = { meta: mail, lines, tail, ai: null, isSample: false };
+    $('#loaded').textContent = '読み込み済み：' + f.name;
+    $('#sample-badge').hidden = true;
+    render();
+    setStatus(`「${plain(mail.subject || f.name)}」を読み込みました。`);
+    if (layout === 'op') runAi();
+  } catch (e) {
+    console.error(e);
+    setStatus('このファイルは読み込めませんでした。Outlookの .msg か .eml を選んでください。（' + (e.message || e) + '）', true);
+  }
+}
+const drop = $('#drop'), fileIn = $('#file');
+fileIn.addEventListener('change', () => { if (fileIn.files[0]) loadFile(fileIn.files[0]); fileIn.value = ''; });
+drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileIn.click(); } });
+['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => drop.addEventListener(t, () => drop.classList.remove('over')));
+drop.addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) loadFile(f); });
+document.addEventListener('dragover', e => { if (!e.target.closest('#paste')) e.preventDefault(); });
+document.addEventListener('drop', e => {
+  if (e.target.closest('#paste') || e.target.closest('#drop') || e.target.closest('#paper')) return;
+  e.preventDefault(); const f = e.dataTransfer.files[0];
+  if (f && /\.(msg|eml)$/i.test(f.name)) { selectTab('file'); loadFile(f); }
+  else if (f && f.type.startsWith('image/') && current) insertFigure(f, lastRange);
+});
+
+/* ================= 入力：貼り付け ================= */
+function selectTab(which) {
+  $('#tab-file').setAttribute('aria-selected', which === 'file');
+  $('#tab-paste').setAttribute('aria-selected', which === 'paste');
+  $('#pane-file').hidden = which !== 'file';
+  $('#pane-paste').hidden = which !== 'paste';
+}
+$('#tab-file').addEventListener('click', () => selectTab('file'));
+$('#tab-paste').addEventListener('click', () => selectTab('paste'));
+const pasteBox = $('#paste');
+function insertImageAtCaret(blob) {
+  const id = addImage(blob);
+  const img = document.createElement('img'); img.src = images.get(id).url; img.dataset.img = id;
+  const sel = getSelection();
+  if (sel.rangeCount && pasteBox.contains(sel.anchorNode)) {
+    const r = sel.getRangeAt(0); r.deleteContents(); r.insertNode(img); r.setStartAfter(img); r.collapse(true); sel.removeAllRanges(); sel.addRange(r);
+  } else pasteBox.appendChild(img);
+}
+pasteBox.addEventListener('paste', e => {
+  const cd = e.clipboardData; if (!cd) return;
+  e.preventDefault();
+  const text = cd.getData('text/plain');
+  if (text) document.execCommand('insertText', false, text);
+  [...cd.files].filter(f => f.type.startsWith('image/')).forEach(insertImageAtCaret);
+});
+pasteBox.addEventListener('dragover', e => e.preventDefault());
+pasteBox.addEventListener('drop', e => {
+  const fs = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+  if (!fs.length) return;
+  e.preventDefault();
+  if (document.caretRangeFromPoint) { const r = document.caretRangeFromPoint(e.clientX, e.clientY); if (r) { const s = getSelection(); s.removeAllRanges(); s.addRange(r); } }
+  fs.forEach(insertImageAtCaret);
+});
+$('#add-img').addEventListener('click', () => $('#img-file').click());
+$('#img-file').addEventListener('change', e => { [...e.target.files].forEach(insertImageAtCaret); e.target.value = ''; });
+$('#build-paste').addEventListener('click', () => {
+  const lines = domToLines(pasteBox, img => img.dataset.img || null);
+  if (!lines.some(l => (l.type === 'text' && l.text.trim()) || l.type === 'img')) { setStatus('本文か画像を貼り付けてください。', true); return; }
+  const onlyUrl = lines.filter(l => l.type === 'text' && l.text.trim()).every(l => /^https?:\/\/\S+$/.test(l.text.trim())) && !lines.some(l => l.type === 'img');
+  if (onlyUrl) { const u = lines.find(l => l.type === 'text' && l.text.trim()).text.trim(); $('#paste-url').value = u; updateUrl(); setStatus('URLだけでは読み込めません。「開く」でページを表示して、本文をコピーして貼り付けてください。', true); return; }
+  current = { meta: { subject: $('#paste-subject').value, sender: '', date: new Date(), kind: 'text', url: validUrl($('#paste-url').value) }, lines, tail: [], ai: null, isSample: false };
+  $('#sample-badge').hidden = true;
+  render();
+  setStatus('貼り付けた内容を読み込みました。');
+  if (layout === 'op') runAi();
+});
+
+/* ================= 書き出し ================= */
+let downloads = null;
+if (window.claude && window.claude.use) window.claude.use('downloads').then(d => { downloads = d; updateExportUi(); });
+else downloads = { // claude.ai の外（GitHub Pages など）では、ふつうのダウンロードで保存する
+  save: async ({ filename, data }) => {
+    const url = URL.createObjectURL(data instanceof Blob ? data : new Blob([data]));
+    const a = document.createElement('a'); a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    return { status: 'saved' };
+  },
+};
+updateExportUi();
+function updateExportUi() {
+  const has = !!current;
+  $('#x-copy').disabled = !has;
+  const ok = !!downloads && has;
+  $('#x-pdf').disabled = !ok; $('#x-docx').disabled = !ok;
+  $('#x-pdf').title = $('#x-docx').title = ok ? '' : 'この表示ではファイル保存が使えません';
+}
+const fileBase = () => (($('#paper [data-r="title"]') || {}).innerText || '資料').replace(/[\\/:*?"<>|\r\n]+/g, ' ').trim().slice(0, 60) || '資料';
+async function save(filename, data) {
+  try { await downloads.save({ filename, data }); setStatus(filename + ' を保存しました。'); }
+  catch (e) { setStatus(e && e.code === 'declined' ? '保存をキャンセルしました。' : '保存できませんでした。（' + (e && (e.code || e.message)) + '）', e && e.code !== 'declined'); }
+}
+
+// 紙面を、編集後の状態のまま役割つきの並びとして読み出す
+function runsOf(el) {
+  const out = [];
+  const walk = (n, bold) => {
+    if (n.nodeType === 3) { if (n.nodeValue) out.push({ t: n.nodeValue, b: bold }); return; }
+    if (n.nodeType !== 1 || n.classList.contains('fig-x') || n.tagName === 'svg' || n.tagName === 'SVG') return;
+    if (n.tagName === 'BR') { out.push({ br: true }); return; }
+    const b = bold || n.tagName === 'STRONG' || n.tagName === 'B';
+    n.childNodes.forEach(c => walk(c, b));
+  };
+  walk(el, false);
+  return out.filter(r => r.br || r.t.trim() !== '' || r.t === ' ');
+}
+const txt = el => el ? el.innerText.replace(/\s*\n\s*/g, ' ').trim() : '';
+function readPaper() {
+  const items = [];
+  $('#paper').querySelectorAll('[data-r]').forEach(el => {
+    const r = el.dataset.r;
+    if (['point', 'card', 'step', 'cta'].includes(r)) items.push({ r, n: txt(el.querySelector('.num, .n')), t: txt(el.querySelector('.t')), x: txt(el.querySelector('.x')) });
+    else if (r === 'example') items.push({ r, text: txt(el.querySelector('.op-bubble')) });
+    else if (r === 'num') items.push({ r, t: txt(el.querySelector('.t')), x: txt(el.querySelector('.x')) });
+    else if (r === 'table') items.push({ r, rows: [...el.querySelectorAll('tr')].map(tr => [...tr.children].map(txt)) });
+    else if (r === 'caution') items.push({ r, text: txt(el.querySelector('span')) });
+    else if (r === 'meta') items.push({ r, text: [...el.children].map(txt).join('　　') });
+    else if (r === 'fig') { const img = el.querySelector('img'); if (img) items.push({ r, img, caption: txt(el.querySelector('figcaption')), size: { l: 1, m: 0.66, s: 0.42 }[el.dataset.size || 'l'] || 1 }); }
+    else { const runs = runsOf(el); if (runs.length) items.push({ r, runs }); }
+  });
+  return items;
+}
+function imgToPng(img) {
+  return new Promise((resolve, reject) => {
+    const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+    c.getContext('2d').drawImage(img, 0, 0);
+    c.toBlob(b => b ? resolve(b) : reject(new Error('画像を変換できませんでした')), 'image/png');
+  });
+}
+const xmlEsc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+
+async function buildDocx() {
+  const items = readPaper();
+  const [AC, SOFT] = TONES[$('#paper').dataset.tone] || TONES.indigo;
+  const zip = new JSZip(); const rels = [];
+  const run = (r, extra = '') => r.br ? '<w:r><w:br/></w:r>' :
+    `<w:r><w:rPr>${r.b ? '<w:b/>' : ''}${extra}</w:rPr><w:t xml:space="preserve">${xmlEsc(r.t)}</w:t></w:r>`;
+  const para = (runs, pPr = '', rPr = '') => `<w:p><w:pPr>${pPr}</w:pPr>${runs.map(r => run(r, rPr)).join('')}</w:p>`;
+  const shade = f => `<w:shd w:val="clear" w:color="auto" w:fill="${f}"/>`;
+  const box = (f, c = f) => `<w:pBdr><w:top w:val="single" w:sz="4" w:space="4" w:color="${c}"/><w:left w:val="single" w:sz="4" w:space="6" w:color="${c}"/><w:bottom w:val="single" w:sz="4" w:space="4" w:color="${c}"/><w:right w:val="single" w:sz="4" w:space="6" w:color="${c}"/></w:pBdr>${shade(f)}`;
+  const land = orient === 'land';
+  const MAXW = (land ? 8.5 : 6.0) * 914400, TW = land ? 14570 : 9638;
+  let body = '', n = 0;
+  for (const it of items) {
+    switch (it.r) {
+      case 'cat': body += para(it.runs, '<w:spacing w:after="40"/>', `<w:b/><w:color w:val="${AC}"/><w:sz w:val="18"/>`); break;
+      case 'title': body += para(it.runs, '<w:pStyle w:val="Title"/>'); break;
+      case 'sub': body += para(it.runs, '<w:spacing w:after="80"/>', '<w:color w:val="3A4352"/><w:sz w:val="24"/>'); break;
+      case 'meta': body += para([{ t: it.text }], `<w:pBdr><w:bottom w:val="single" w:sz="18" w:space="6" w:color="${AC}"/></w:pBdr><w:spacing w:after="240"/>`, '<w:color w:val="667085"/><w:sz w:val="18"/>'); break;
+      case 'label': body += para(it.runs, '<w:spacing w:before="120" w:after="80"/>', `<w:b/><w:color w:val="${AC}"/><w:sz w:val="18"/>`); break;
+      case 'point': body += para([{ t: `${it.n}　`, b: true }, { t: it.t, b: true }, { br: true }, { t: it.x }], box(SOFT) + '<w:spacing w:after="100"/>'); break;
+      case 'h': body += para(it.runs, '<w:pStyle w:val="Heading1"/>'); break;
+      case 'p': body += para(it.runs); break;
+      case 'li': body += para([{ t: '✓ ' }, ...it.runs], '<w:ind w:left="420" w:hanging="240"/><w:spacing w:after="20"/>'); break;
+      case 'note': body += para(it.runs, '<w:ind w:left="210" w:hanging="210"/>', '<w:color w:val="667085"/><w:sz w:val="18"/>'); break;
+      case 'hubc': body += para([{ t: '中心テーマ：', b: true }, ...it.runs], box(AC) + '<w:spacing w:after="100"/>', '<w:color w:val="FFFFFF"/><w:b/>'); break;
+      case 'num': body += para([{ t: it.t + '　', b: true }, { t: it.x }], box(SOFT) + '<w:spacing w:after="80"/>'); break;
+      case 'table': {
+        const w = Math.max(...it.rows.map(r => r.length)), cw = Math.floor(TW / w);
+        body += `<w:tbl><w:tblPr><w:tblW w:w="${TW}" w:type="dxa"/><w:tblBorders>${['top', 'left', 'bottom', 'right', 'insideH', 'insideV'].map(k => `<w:${k} w:val="single" w:sz="4" w:color="DFE4EC"/>`).join('')}</w:tblBorders><w:tblCellMar><w:top w:w="60" w:type="dxa"/><w:left w:w="100" w:type="dxa"/><w:bottom w:w="60" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid>${'<w:gridCol w:w="' + cw + '"/>'.repeat(w)}</w:tblGrid>` +
+          it.rows.map((r, ri) => `<w:tr>${Array.from({ length: w }, (_, ci) => `<w:tc><w:tcPr><w:tcW w:w="${cw}" w:type="dxa"/>${ri === 0 ? shade(AC) : ci === 0 ? shade(SOFT) : ''}</w:tcPr>${para([{ t: r[ci] || '', b: ri === 0 || ci === 0 }], '<w:spacing w:after="0"/>', ri === 0 ? '<w:color w:val="FFFFFF"/><w:sz w:val="18"/>' : '<w:sz w:val="18"/>')}</w:tc>`).join('')}</w:tr>`).join('') +
+          '</w:tbl>' + para([], '<w:spacing w:after="120"/>');
+        break;
+      }
+      case 'card': body += para([...(it.t ? [{ t: it.t, b: true }, { br: true }] : []), { t: it.x }], `<w:pBdr><w:left w:val="single" w:sz="24" w:space="8" w:color="${AC}"/></w:pBdr><w:ind w:left="240"/><w:spacing w:after="100"/>`); break;
+      case 'step': body += para([{ t: `${it.n}　`, b: true }, { t: it.t, b: true }, ...(it.x ? [{ br: true }, { t: it.x }] : [])], box(SOFT) + '<w:spacing w:after="100"/>'); break;
+      case 'example':
+        body += para([{ t: '入力例', b: true }], '<w:spacing w:after="40"/>', `<w:color w:val="${AC}"/><w:sz w:val="18"/>`);
+        body += para([{ t: it.text, b: true }], box(AC) + '<w:ind w:left="400"/><w:spacing w:after="160"/>', '<w:color w:val="FFFFFF"/>'); break;
+      case 'caution': body += para([{ t: '注意　', b: true }, { t: it.text }], box('FFF6E5', 'F0D9A8') + '<w:spacing w:before="160" w:after="160"/>', '<w:color w:val="6B4A00"/>'); break;
+      case 'cta': body += para([{ t: it.t, b: true }, { br: true }, { t: it.x }], box(SOFT) + '<w:spacing w:before="240" w:after="160"/>'); break;
+      case 'foot': body += para(it.runs, `<w:pBdr><w:top w:val="single" w:sz="4" w:space="6" w:color="DFE4EC"/></w:pBdr><w:spacing w:before="240"/>`, '<w:color w:val="667085"/><w:sz w:val="16"/>'); break;
+      case 'fig': {
+        n++;
+        zip.file(`word/media/image${n}.png`, await imgToPng(it.img));
+        rels.push(`<Relationship Id="rIdImg${n}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image${n}.png"/>`);
+        let cx = Math.round((it.img.naturalWidth || 600) / 96 * 914400), cy = Math.round((it.img.naturalHeight || 400) / 96 * 914400);
+        if (cx > MAXW) { cy = Math.round(cy * MAXW / cx); cx = MAXW; }
+        cx = Math.round(cx * it.size); cy = Math.round(cy * it.size);
+        body += `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="160" w:after="40"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${cx}" cy="${cy}"/><wp:docPr id="${n}" name="図${n}"/><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${n}" name="image${n}.png"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="rIdImg${n}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:ln w="6350"><a:solidFill><a:srgbClr val="DFE4EC"/></a:solidFill></a:ln></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+        if (it.caption) body += para([{ t: it.caption }], '<w:pStyle w:val="Caption"/>');
+        break;
+      }
+    }
+  }
+  const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><w:body>${body}<w:sectPr>${land ? '<w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>' : '<w:pgSz w:w="11906" w:h="16838"/>'}<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr></w:body></w:document>`;
+  const font = '<w:rFonts w:ascii="Meiryo UI" w:hAnsi="Meiryo UI" w:eastAsia="Meiryo UI" w:cs="Meiryo UI"/>';
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:docDefaults><w:rPrDefault><w:rPr>${font}<w:sz w:val="20"/><w:szCs w:val="20"/><w:color w:val="1D2430"/><w:lang w:val="en-US" w:eastAsia="ja-JP"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="80" w:line="300" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults>
+<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/></w:style>
+<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:spacing w:after="120" w:line="360" w:lineRule="auto"/></w:pPr><w:rPr><w:b/><w:sz w:val="40"/><w:szCs w:val="40"/><w:color w:val="${AC}"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/><w:pPr><w:keepNext/><w:pBdr><w:left w:val="single" w:sz="36" w:space="6" w:color="${AC}"/><w:bottom w:val="single" w:sz="4" w:space="3" w:color="DFE4EC"/></w:pBdr><w:spacing w:before="360" w:after="120"/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:sz w:val="26"/><w:szCs w:val="26"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="Caption"><w:name w:val="caption"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:jc w:val="center"/><w:spacing w:after="200"/></w:pPr><w:rPr><w:color w:val="667085"/><w:sz w:val="17"/></w:rPr></w:style>
+</w:styles>`;
+  zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>`);
+  zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
+  zip.file('word/_rels/document.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>${rels.join('')}</Relationships>`);
+  zip.file('word/document.xml', document);
+  zip.file('word/styles.xml', styles);
+  return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+}
+window.__buildDocx = buildDocx;
+$('#x-docx').addEventListener('click', async () => {
+  if (!downloads) return;
+  if (!window.JSZip) { setStatus('Word書き出しの部品を読み込めませんでした。ページを開き直してください。', true); return; }
+  setStatus('Wordファイルを作っています…');
+  try { await save(fileBase() + '.docx', await buildDocx()); } catch (e) { console.error(e); setStatus('Wordファイルを作れませんでした。', true); }
+});
+
+async function buildPdf() {
+  const { PW, PH } = pageDims(), MT = 36, land = orient === 'land';
+  const N = pagesSel === 'auto' ? 'auto' : +pagesSel;
+  const holder = document.createElement('div');
+  holder.style.cssText = `position:absolute;left:0;top:0;width:${PW}px;z-index:-1;pointer-events:none;`;
+  const clone = $('#paper').cloneNode(true);
+  clone.classList.add('exporting'); clone.removeAttribute('id');
+  clone.style.cssText = `width:${PW}px;max-width:none;margin:0;`;
+  clone.removeAttribute('contenteditable');
+  clone.querySelectorAll('[contenteditable]').forEach(e => e.removeAttribute('contenteditable'));
+  clone.querySelectorAll('.fig-x').forEach(e => e.remove());
+  holder.appendChild(clone); document.body.appendChild(holder);
+  try {
+    await document.fonts.ready;
+    await Promise.all([...clone.querySelectorAll('img')].map(i => i.decode().catch(() => {})));
+    // html2canvas は SVG の currentColor を解決しないので、実際の色を書き込む
+    clone.querySelectorAll('svg.ic').forEach(s => { const c = getComputedStyle(s).color; s.setAttribute('stroke', c); s.setAttribute('fill', 'none'); s.style.color = c; });
+    // 指定ページ数に収まらないときは、まず横幅を広げて組み直し（文字を小さく）、足りない分だけ縮小する
+    let w = PW, plan = planPages(clone, N);
+    for (let i = 0; i < 5 && N !== 'auto' && plan.k < 0.98 && w < PW * 1.6; i++) {
+      w = Math.min(Math.round(PW * 1.6), Math.round(w / Math.sqrt(plan.k)));
+      clone.style.width = w + 'px'; holder.style.width = w + 'px';
+      plan = planPages(clone, N);
+    }
+    const scale = 2;
+    const canvas = await html2canvas(clone, { scale, backgroundColor: '#ffffff', logging: false, scrollX: 0, scrollY: -window.scrollY, windowWidth: document.documentElement.clientWidth });
+    const pdf = new jspdf.jsPDF({ unit: 'px', format: [PW, PH], orientation: land ? 'landscape' : 'portrait', hotfixes: ['px_scaling'], compress: true });
+    const { k, u, pages } = plan;
+    pages.forEach(([a, b], i) => {
+      if (i) pdf.addPage([PW, PH], land ? 'landscape' : 'portrait');
+      const h = b - a, c = document.createElement('canvas');
+      c.width = Math.round(w * scale); c.height = Math.max(1, Math.ceil(h * scale));
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+      g.drawImage(canvas, 0, Math.round(a * scale), c.width, c.height, 0, 0, c.width, c.height);
+      const dw = PW * k, dh = h * u * k;
+      pdf.addImage(c.toDataURL('image/jpeg', 0.92), 'JPEG', (PW - dw) / 2, i ? MT : 0, dw, dh);
+      if (pages.length > 1) { pdf.setFontSize(9); pdf.setTextColor(150); pdf.text(`${i + 1} / ${pages.length}`, PW / 2, PH - 16, { align: 'center' }); }
+    });
+    return pdf.output('blob');
+  } finally { holder.remove(); }
+}
+window.__buildPdf = buildPdf;
+$('#x-pdf').addEventListener('click', async () => {
+  if (!downloads) return;
+  if (!window.html2canvas || !window.jspdf) { setStatus('PDF書き出しの部品を読み込めませんでした。ページを開き直してください。', true); return; }
+  setStatus('PDFを作っています…');
+  try { await save(fileBase() + '.pdf', await buildPdf()); } catch (e) { console.error(e); setStatus('PDFを作れませんでした。', true); }
+});
+
+// コピー：画像を埋め込んだHTMLとしてクリップボードへ（Word・PowerPoint・Outlookに貼れる）
+async function paperHtmlForClipboard() {
+  const items = readPaper();
+  const [AC, SOFT] = (TONES[$('#paper').dataset.tone] || TONES.indigo).map(c => '#' + c);
+  const r2h = rs => rs.map(r => r.br ? '<br>' : (r.b ? `<b>${esc(r.t)}</b>` : esc(r.t))).join('');
+  const F = "font-family:'Meiryo UI',Meiryo,sans-serif;";
+  const boxS = `background:${SOFT};padding:8px 12px;margin:0 0 8px;border-radius:6px`;
+  let h = `<div style="${F}color:#1d2430;font-size:10.5pt;line-height:1.7">`;
+  for (const it of items) {
+    switch (it.r) {
+      case 'cat': h += `<p style="color:${AC};font-size:9pt;font-weight:bold;margin:0">${r2h(it.runs)}</p>`; break;
+      case 'title': h += `<h1 style="${F}font-size:20pt;color:${AC};margin:4px 0 6px">${r2h(it.runs)}</h1>`; break;
+      case 'sub': h += `<p style="font-size:12pt;color:#3a4352;margin:0 0 6px">${r2h(it.runs)}</p>`; break;
+      case 'meta': h += `<p style="color:#667085;font-size:9pt;border-bottom:2px solid ${AC};padding-bottom:6px">${esc(it.text)}</p>`; break;
+      case 'label': h += `<p style="color:${AC};font-weight:bold;font-size:9pt;margin:12px 0 4px">${r2h(it.runs)}</p>`; break;
+      case 'point': case 'step': h += `<p style="${boxS}"><b>${esc(it.n)}　${esc(it.t)}</b>${it.x ? '<br>' + esc(it.x) : ''}</p>`; break;
+      case 'h': h += `<h2 style="${F}font-size:13pt;border-left:5px solid ${AC};padding-left:8px;margin:16px 0 6px">${r2h(it.runs)}</h2>`; break;
+      case 'p': h += `<p style="margin:0 0 4px">${r2h(it.runs)}</p>`; break;
+      case 'li': h += `<p style="margin:0 0 2px 1em">✓ ${r2h(it.runs)}</p>`; break;
+      case 'note': case 'foot': h += `<p style="color:#667085;font-size:9pt">${r2h(it.runs)}</p>`; break;
+      case 'hubc': h += `<p style="background:${AC};color:#fff;font-weight:bold;padding:8px 12px;border-radius:8px">中心テーマ：${r2h(it.runs)}</p>`; break;
+      case 'num': h += `<p style="${boxS}"><b style="font-size:16pt;color:${AC}">${esc(it.t)}</b>　${esc(it.x)}</p>`; break;
+      case 'table': h += `<table style="border-collapse:collapse;width:100%;font-size:9.5pt;margin:4px 0 10px">${it.rows.map((r, ri) => `<tr>${r.map((c, ci) => `<td style="border:1px solid #dfe4ec;padding:5px 8px;${ri === 0 ? `background:${AC};color:#fff;font-weight:bold` : ci === 0 ? `background:${SOFT};font-weight:bold` : ''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</table>`; break;
+      case 'card': h += `<p style="border-left:4px solid ${AC};padding-left:8px;margin:0 0 8px">${it.t ? `<b>${esc(it.t)}</b><br>` : ''}${esc(it.x)}</p>`; break;
+      case 'example': h += `<p style="color:${AC};font-size:9pt;font-weight:bold;margin:6px 0 2px">入力例</p><p style="background:${AC};color:#fff;font-weight:bold;padding:8px 12px;border-radius:8px">${esc(it.text)}</p>`; break;
+      case 'caution': h += `<p style="background:#fff6e5;border:1px solid #f0d9a8;color:#6b4a00;padding:8px 12px"><b>注意</b>　${esc(it.text)}</p>`; break;
+      case 'cta': h += `<p style="${boxS};margin-top:12px"><b style="color:${AC}">${esc(it.t)}</b><br>${esc(it.x)}</p>`; break;
+      case 'fig': {
+        const c = document.createElement('canvas'); c.width = it.img.naturalWidth; c.height = it.img.naturalHeight; c.getContext('2d').drawImage(it.img, 0, 0);
+        h += `<p style="text-align:center;margin:8px 0 2px"><img src="${c.toDataURL('image/png')}" width="${Math.round(Math.min(it.img.naturalWidth, 560) * it.size)}"></p>` + (it.caption ? `<p style="text-align:center;color:#667085;font-size:9pt">${esc(it.caption)}</p>` : '');
+        break;
+      }
+    }
+  }
+  return h + '</div>';
+}
+$('#x-copy').addEventListener('click', async () => {
+  const text = $('#paper').innerText;
+  try {
+    if (!window.ClipboardItem || !navigator.clipboard.write) throw new Error('no rich');
+    const html = paperHtmlForClipboard().then(s => new Blob([s], { type: 'text/html' }));
+    await navigator.clipboard.write([new ClipboardItem({ 'text/html': html, 'text/plain': new Blob([text], { type: 'text/plain' }) })]);
+    setStatus('コピーしました。Word・PowerPoint・Outlookなどに貼り付けてください。');
+  } catch {
+    try { await navigator.clipboard.writeText(text); setStatus('文字だけコピーしました（この環境では画像を一緒にコピーできません）。'); }
+    catch { const r = document.createRange(); r.selectNodeContents($('#paper')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); setStatus('資料を選択しました。Ctrl+C（⌘+C）でコピーしてください。'); }
+  }
+});
+
+/* ================= サンプル（架空の共有メールと、AIが組んだ例） ================= */
+function mockShot(title, rows, box) {
+  const c = document.createElement('canvas'); c.width = 720; c.height = 330;
+  const g = c.getContext('2d');
+  g.fillStyle = '#f6f7f9'; g.fillRect(0, 0, 720, 330);
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, 180, 330);
+  g.fillStyle = '#e4e7ec'; g.fillRect(180, 0, 1, 330);
+  g.font = '15px sans-serif'; g.fillStyle = '#333';
+  ['新しいメモ', '議事録', 'テンプレート', '共有', '設定'].forEach((t, i) => g.fillText(t, 24, 44 + i * 36));
+  g.font = 'bold 20px sans-serif'; g.fillText(title, 210, 48);
+  g.font = '15px sans-serif';
+  rows.forEach((t, i) => { g.fillStyle = '#ffffff'; g.fillRect(210, 76 + i * 64, 480, 50); g.fillStyle = '#444'; g.fillText(t, 228, 107 + i * 64); });
+  if (box) { g.strokeStyle = '#1f5fd6'; g.lineWidth = 3; g.strokeRect(...box); }
+  return new Promise(r => c.toBlob(r, 'image/png'));
+}
+async function loadSample() {
+  const a = addImage(await mockShot('会議メモ（自動まとめ）', ['決定事項：次回リリースは11月第2週', 'ToDo：見積書の更新（担当：営業部）', '次回：11月5日 10:00〜'], [206, 70, 488, 58]));
+  const b = addImage(await mockShot('テンプレートを選ぶ', ['定例会議用', '商談メモ用', '1on1用'], [18, 98, 150, 34]));
+  const html = `<p>営業部のみなさま</p><p>お疲れ様です、山田です。</p><p>会議の議事録を短時間でまとめる方法を共有します。</p>
+  <p>■ やり方</p><p>会議の録音をメモアプリに取り込み、「議事録にまとめて」と頼むだけです。</p>
+  <p class="MsoListParagraph">決定事項</p><p class="MsoListParagraph">ToDo と担当者</p><p class="MsoListParagraph">次回の予定</p><p>が自動で整理されます。</p>
+  <img src="cid:a"><p>■ テンプレートの使い分け</p><p>左の「テンプレート」から会議の種類を選ぶと、まとめ方が変わります。</p><img src="cid:b">
+  <p>※社外秘の会議では使わないでください。</p><p>以上です。よろしくお願いいたします。</p>
+  <p>＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿</p><p>サンプル株式会社　山田 太郎</p>`;
+  const d = new DOMParser().parseFromString(html, 'text/html');
+  const lines = domToLines(d.body, img => img.getAttribute('src') === 'cid:a' ? a : b);
+  const date = new Date();
+  current = { meta: { subject: '【共有】会議の議事録を5分で作る方法', sender: '', date }, lines, tail: [], isSample: true, ai: {
+    category: 'ノウハウ共有', title: '会議の議事録は「録音して頼むだけ」', subtitle: '録音を取り込むだけで、決定事項・ToDo・次回予定まで自動で整理できます。', heroIcon: 'chat',
+    points: [
+      { icon: 'clock', title: '議事録が5分で完成', text: '録音を取り込み「議事録にまとめて」と頼むだけです。' },
+      { icon: 'list', title: '要点を自動で整理', text: '決定事項、ToDoと担当者、次回予定に分けてくれます。' },
+      { icon: 'settings', title: '会議に合わせて選ぶ', text: 'テンプレートで、会議の種類ごとにまとめ方を変えられます。' },
+    ],
+    sections: [
+      { heading: '使い方は3ステップ', icon: 'settings', type: 'steps', paras: [], items: [
+        { title: '会議を録音する', text: 'いつもどおり会議を録音します。' },
+        { title: 'メモアプリに取り込む', text: '録音データをメモアプリに入れます。' },
+        { title: '「議事録にまとめて」と頼む', text: '要点ごとに整理された議事録ができます。' }], example: '', notes: [], figs: [] },
+      { heading: '自動でまとまる内容', icon: 'list', type: 'bullets', paras: ['次の3つに分けて整理されます。'], items: [
+        { title: '', text: '決定事項' }, { title: '', text: 'ToDo と担当者' }, { title: '', text: '次回の予定' }], example: '議事録にまとめて', notes: [], figs: [{ id: a, caption: '決定事項・ToDo・次回予定が自動で並んだ画面' }] },
+      { heading: 'テンプレートの使い分け', icon: 'book', type: 'cards', paras: ['左の「テンプレート」から会議の種類を選ぶと、まとめ方が変わります。'], items: [
+        { title: '定例会議用', text: '決まったことと宿題を中心にまとめます。' }, { title: '商談メモ用', text: 'お客様とのやりとりを記録します。' }, { title: '1on1用', text: '面談の内容を残します。' }], example: '', notes: [], figs: [{ id: b, caption: 'テンプレートは左のメニューから選べます' }] },
+    ],
+    caution: '社外秘の会議では使わないでください。',
+    cta: { title: '次の会議で試してみましょう', text: '録音して取り込むだけで、議事録作成の時間を短くできます。' },
+    author: '山田', date, subject: '【共有】会議の議事録を5分で作る方法',
+  } };
+  render();
+}
+
+/* ================= URL 欄とクリア ================= */
+function validUrl(v) { try { const u = new URL(String(v || '').trim()); return /^https?:$/.test(u.protocol) ? u.href : ''; } catch { return ''; } }
+function updateUrl() {
+  const u = validUrl($('#paste-url').value);
+  $('#open-url').hidden = !u; $('#url-notice').hidden = !u;
+  if (u) $('#open-url').href = u;
+}
+$('#paste-url').addEventListener('input', updateUrl);
+let clearTimer = null;
+$('#clear').addEventListener('click', () => {
+  const btn = $('#clear'), label = btn.querySelector('span');
+  if (!btn.classList.contains('danger-armed')) {
+    btn.classList.add('danger-armed'); label.textContent = 'もう一度押すと消えます';
+    clearTimeout(clearTimer); clearTimer = setTimeout(() => { btn.classList.remove('danger-armed'); label.textContent = '内容をクリア'; }, 3000);
+    return;
+  }
+  clearTimeout(clearTimer); btn.classList.remove('danger-armed'); label.textContent = '内容をクリア';
+  aiSeq++;
+  $('#ai-badge').hidden = true; $('#ai').disabled = false;
+  images.forEach(im => URL.revokeObjectURL(im.url)); images.clear();
+  current = null; lastRange = null;
+  pasteBox.innerHTML = ''; $('#paste-subject').value = ''; $('#paste-url').value = ''; updateUrl();
+  $('#loaded').textContent = ''; $('#sample-badge').hidden = true;
+  render();
+  setStatus('内容をクリアしました。');
+});
+
+loadSample();
+})();
+</script>
+
+</body>
+</html>
